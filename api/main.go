@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"net/http"
 	"os"
 
 	"github.com/gin-contrib/cors"
@@ -11,71 +10,59 @@ import (
 	"github.com/newssourcecrawler/realtorinstall/api/repos"
 	"github.com/newssourcecrawler/realtorinstall/api/services"
 	"github.com/newssourcecrawler/realtorinstall/internal/models"
-	intRepos "github.com/newssourcecrawler/realtorinstall/internal/repos" // import internal repos
+	intRepos "github.com/newssourcecrawler/realtorinstall/internal/repos"
 )
 
 func main() {
-	// 1. Ensure data folder exists (SQLite)
+	// 1. Ensure data folder exists (for SQLite files)
 	if err := os.MkdirAll("data", 0755); err != nil {
 		panic(err)
 	}
 
-	// 2. Initialize SQLite-backed repo + service
-	dbPath := "data/properties.db"
-	propRepo, err := repos.NewSQLitePropertyRepo(dbPath)
-	if err != nil {
-		panic(err)
-	}
-	propSvc := services.NewPropertyService(propRepo)
-
-	// 1. PropertyRepo for API (api/repos/sqlite_property_repo.go)
-	propRepo, err := repos.NewSQLitePropertyRepo("data/api-properties.db")
+	// 2. Initialize the API's PropertyRepo (api/repos/sqlite_property_repo.go)
+	propRepo, err := repos.NewSQLitePropertyRepo("data/properties.db")
 	if err != nil {
 		panic(err)
 	}
 
-	// 2. LocationPricingRepo from internal (internal/repos/sqlite_locationpricing_repo.go)
-	pricingRepo, err := intRepos.NewSQLiteLocationPricingRepo("data/api-pricing.db")
+	// 3. Initialize the internal LocationPricingRepo (internal/repos/sqlite_locationpricing_repo.go)
+	pricingRepo, err := intRepos.NewSQLiteLocationPricingRepo("data/pricing.db")
 	if err != nil {
 		panic(err)
 	}
 
-	// 3. Now pass both repos when constructing the service:
-	propService := services.NewPropertyService(propRepo, pricingRepo)
+	// 4. Construct the PropertyService with both repos
+	propSvc := services.NewPropertyService(propRepo, pricingRepo)
 
-	// 3. Create Gin router
+	// 5. Create Gin router and enable CORS
 	r := gin.Default()
-	// Allow CORS from any origin (for local dev):
 	r.Use(cors.Default())
 
-	// 4. Register property‐related routes
-	//    GET  /properties         → list all
-	//    POST /properties         → create new
-	//    (You can add PUT/DELETE later)
+	// 6. GET /properties → list all properties
 	r.GET("/properties", func(c *gin.Context) {
-		ps, err := propSvc.ListProperties(context.Background())
+		props, err := propSvc.ListProperties(context.Background())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, ps)
+		c.JSON(200, props)
 	})
+
+	// 7. POST /properties → create a new property
 	r.POST("/properties", func(c *gin.Context) {
 		var p models.Property
 		if err := c.BindJSON(&p); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(400, gin.H{"error": err.Error()})
 			return
 		}
 		id, err := propSvc.CreateProperty(context.Background(), p)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"id": id})
+		c.JSON(200, gin.H{"id": id})
 	})
 
-	// 5. (Optionally add handlers for installments, buyers, etc.)
-
-	// 6. Start server on port 8080
+	// 8. Start the server on port 8080
 	r.Run(":8080")
 }

@@ -7,12 +7,8 @@ import (
 	"log"
 	"os"
 
-	"net/http"
-
 	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options"
-	assetopts "github.com/wailsapp/wails/v2/pkg/options/assetserver"
 
 	"github.com/newssourcecrawler/realtorinstall/internal/repos"
 	"github.com/newssourcecrawler/realtorinstall/internal/services"
@@ -67,13 +63,13 @@ func main() {
 	reportService := services.NewReportService(installmentRepo)
 
 	// 5. Create an AssetServer pointing at ./frontend
-	assetServer, err := assetserver.NewAssetServer(
-		"frontend",                     // directory to serve
-		assetopts.Options{},            // default options
-		false,                          // false = do not embed (dev mode)
-		assetserver.Logger(nil),        // no custom logger
-		assetserver.RuntimeAssets(nil), // no runtime assets override
-	)
+	//assetServer, err := assetserver.NewAssetServer(
+	//	"frontend",                     // directory to serve
+	//	assetopts.Options{},            // default options
+	//	false,                          // false = do not embed (dev mode)
+	//	assetserver.Logger(nil),        // no custom logger
+	//	assetserver.RuntimeAssets(nil), // no runtime assets override
+	//)
 	if err != nil {
 		log.Fatalf("Failed to create AssetServer: %v", err)
 	}
@@ -95,10 +91,10 @@ func main() {
 			pricingService,
 			reportService,
 		},
-		Assets: assetServer, // use the AssetServer we just created
+		//Assets: assetServer, // use the AssetServer we just created
 		// Optional: if you want a custom HTTP handler (e.g., for API endpoints),
 		// you can add a Middleware. By default, none is needed:
-		Middleware: []http.Handler{},
+		//Middleware: []http.Handler{},
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

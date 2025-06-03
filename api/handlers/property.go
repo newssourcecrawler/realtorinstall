@@ -1,3 +1,4 @@
+// api/handlers/property.go
 package handlers
 
 import (
@@ -5,8 +6,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/newssourcecrawler/realtorinstall/api/models"
 	"github.com/newssourcecrawler/realtorinstall/api/services"
+	intModels "github.com/newssourcecrawler/realtorinstall/internal/models"
 )
 
 type PropertyHandler struct {
@@ -27,7 +28,7 @@ func (h *PropertyHandler) List(c *gin.Context) {
 }
 
 func (h *PropertyHandler) Create(c *gin.Context) {
-	var p models.Property
+	var p intModels.Property
 	if err := c.BindJSON(&p); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
