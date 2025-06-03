@@ -1,70 +1,165 @@
+// cmd/app/main.go
 package main
 
 import (
-	"context"
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
-	"os"
 
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/widget"
+)
 
-	"github.com/newssourcecrawler/realtorinstall/api/repos"
-	"github.com/newssourcecrawler/realtorinstall/api/services"
-	"github.com/newssourcecrawler/realtorinstall/internal/models"
-	intRepos "github.com/newssourcecrawler/realtorinstall/internal/repos"
+// Property matches the JSON shape from the API (and internal/models.Property).
+type Property struct {
+	ID           int64  `json:"id"`
+	Address      string `json:"address"`
+	City         string `json:"city"`
+	ZIP          string `json:"zip"`
+	ListingDate  string `json:"listing_date"`
+	CreatedAt    string `json:"created_at"`
+	LastModified string `json:"last_modified"`
+}
+
+var (
+	// properties holds the last‐fetched slice of Property.
+	properties []Property
+
+	// propList is the Fyne List widget; we keep it global so loadProperties can call propList.Refresh().
+	propList *widget.List
+
+	// apiURL is the base URL for the API. Change if your server is remote.
+	apiURL = "http://localhost:8080"
 )
 
 func main() {
-	// 1. Ensure data folder exists (for SQLite files)
-	if err := os.MkdirAll("data", 0755); err != nil {
-		panic(err)
-	}
+	// 1. Create a Fyne application
+	myApp := app.New()
+	myWin := myApp.NewWindow("Realtor Installment Assistant")
 
-	// 2. Initialize the PropertyRepo (API-level repo)
-	dbPath := "data/properties.db"
-	propRepo, err := repos.NewSQLitePropertyRepo(dbPath)
-	if err != nil {
-		panic(err)
-	}
+	// 2. Build the "Add Property" form fields and button
+	addressEntry := widget.NewEntry()
+	addressEntry.SetPlaceHolder("Address")
 
-	// 3. Initialize the LocationPricingRepo (internal repo)
-	pricingRepo, err := intRepos.NewSQLiteLocationPricingRepo("data/pricing.db")
-	if err != nil {
-		panic(err)
-	}
+	cityEntry := widget.NewEntry()
+	cityEntry.SetPlaceHolder("City")
 
-	// 4. Construct the PropertyService with both repos
-	propSvc := services.NewPropertyService(propRepo, pricingRepo)
+	zipEntry := widget.NewEntry()
+	zipEntry.SetPlaceHolder("ZIP Code")
 
-	// 5. Create Gin router and enable CORS
-	r := gin.Default()
-	r.Use(cors.Default())
+	addBtn := widget.NewButton("Add Property", func() {
+		// Gather input from each field
+		p := map[string]string{
+			"address": addressEntry.Text,
+			"city":    cityEntry.Text,
+			"zip":     zipEntry.Text,
+		}
 
-	// 6. GET /properties → return all properties
-	r.GET("/properties", func(c *gin.Context) {
-		props, err := propSvc.ListProperties(context.Background())
+		// POST to /properties
+		bodyBytes, _ := json.Marshal(p)
+		resp, err := http.Post(apiURL+"/properties", "application/json", bytes.NewReader(bodyBytes))
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			dialog.ShowError(fmt.Errorf("failed to POST: %w", err), myWin)
 			return
 		}
-		c.JSON(http.StatusOK, props)
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			b, _ := io.ReadAll(resp.Body)
+			dialog.ShowError(fmt.Errorf("API error: %s", string(b)), myWin)
+			return
+		}
+
+		// Clear form on success
+		addressEntry.SetText("")
+		cityEntry.SetText("")
+		zipEntry.SetText("")
+
+		// Refresh the list
+		loadProperties(myWin)
 	})
 
-	// 7. POST /properties → create a new property
-	r.POST("/properties", func(c *gin.Context) {
-		var p models.Property
-		if err := c.BindJSON(&p); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		id, err := propSvc.CreateProperty(context.Background(), p)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"id": id})
+	// 3. Create the List widget (initially empty)
+	propList = widget.NewList(
+		// Length: number of rows = len(properties)+1 (header)
+		func() int {
+			return len(properties) + 1
+		},
+		// Create template: a single label per row
+		func() fyne.CanvasObject {
+			return widget.NewLabel("cell")
+		},
+		// Update each row by ID
+		func(id widget.ListItemID, obj fyne.CanvasObject) {
+			label := obj.(*widget.Label)
+			if id == 0 {
+				// Header row
+				label.SetText("ID | Address | City | ZIP | Listed At")
+				label.TextStyle = fyne.TextStyle{Bold: true}
+				return
+			}
+			// Data rows
+			p := properties[id-1]
+			label.TextStyle = fyne.TextStyle{}
+			label.SetText(fmt.Sprintf(
+				"%d | %s | %s | %s | %s",
+				p.ID, p.Address, p.City, p.ZIP, p.ListingDate,
+			))
+		},
+	)
+
+	// 4. Create a "Refresh Properties" button
+	refreshBtn := widget.NewButton("Refresh Properties", func() {
+		loadProperties(myWin)
 	})
 
-	// 8. Start the server on port 8080
-	r.Run(":8080")
+	// 5. Arrange all widgets in a vertical box
+	form := container.NewVBox(
+		widget.NewLabelWithStyle("Add New Property", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
+		addressEntry,
+		cityEntry,
+		zipEntry,
+		addBtn,
+		widget.NewSeparator(),
+		refreshBtn,
+		propList,
+	)
+
+	myWin.SetContent(form)
+	myWin.Resize(fyne.NewSize(600, 400))
+
+	// 6. Initial load of properties
+	loadProperties(myWin)
+
+	myWin.ShowAndRun()
+}
+
+// loadProperties fetches properties from GET /properties and refreshes propList.
+func loadProperties(win fyne.Window) {
+	resp, err := http.Get(apiURL + "/properties")
+	if err != nil {
+		dialog.ShowError(fmt.Errorf("failed to GET: %w", err), win)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		dialog.ShowError(fmt.Errorf("API error: %s", string(b)), win)
+		return
+	}
+
+	var ps []Property
+	if err := json.NewDecoder(resp.Body).Decode(&ps); err != nil {
+		dialog.ShowError(fmt.Errorf("decode error: %w", err), win)
+		return
+	}
+
+	properties = ps
+	propList.Refresh()
 }
