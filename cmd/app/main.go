@@ -11,7 +11,6 @@ import (
 	"github.com/newssourcecrawler/realtorinstall/api/repos"
 	"github.com/newssourcecrawler/realtorinstall/api/services"
 	"github.com/newssourcecrawler/realtorinstall/internal/models"
-	intRepos "github.com/newssourcecrawler/realtorinstall/internal/repos" // import internal repos
 )
 
 func main() {
@@ -27,21 +26,6 @@ func main() {
 		panic(err)
 	}
 	propSvc := services.NewPropertyService(propRepo)
-
-	// 1. PropertyRepo for API (api/repos/sqlite_property_repo.go)
-	propRepo, err := repos.NewSQLitePropertyRepo("data/api-properties.db")
-	if err != nil {
-		panic(err)
-	}
-
-	// 2. LocationPricingRepo from internal (internal/repos/sqlite_locationpricing_repo.go)
-	pricingRepo, err := intRepos.NewSQLiteLocationPricingRepo("data/api-pricing.db")
-	if err != nil {
-		panic(err)
-	}
-
-	// 3. Now pass both repos when constructing the service:
-	propService := services.NewPropertyService(propRepo, pricingRepo)
 
 	// 3. Create Gin router
 	r := gin.Default()
