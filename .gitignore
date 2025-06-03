@@ -1,0 +1,26 @@
+# Node modules
+/frontend/node_modules/
+
+# SQLite database and backups
+/data/
+/frontend/wailsjs/go/
+
+# Wails build artifacts (if any)
+/frontend/build/
+/build/
+
+# macOS metadata
+.DS_Store
+
+# IDE or editor folders
+.vscode/
+.idea/
+
+# Compiled Go binaries
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Logs
+*.log

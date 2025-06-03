@@ -1,0 +1,14 @@
+{
+  "name": "realtorinstall-frontend",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@wailsapp/runtime2": "^1.0.3",
+    "vite": "^4.0.0"
+  },
+  "devDependencies": {}
+}

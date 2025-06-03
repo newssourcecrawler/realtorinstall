@@ -1,0 +1,13 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "realtorinstall",
+  "outputfilename": "realtorinstall",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "newssourcecrawler",
+    "email": "153397461+newssourcecrawler@users.noreply.github.com"
+  }
+}

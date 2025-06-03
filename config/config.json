@@ -1,0 +1,9 @@
+{
+  "DatabasePath": "data/data.db",
+  "SMTPHost": "",
+  "SMTPPort": 587,
+  "SMTPUser": "",
+  "SMTPPass": "",
+  "AdminUser": "seller",
+  "AdminHash": ""
+}
