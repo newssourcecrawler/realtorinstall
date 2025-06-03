@@ -4,6 +4,7 @@
 # SQLite database and backups
 /data/
 /frontend/wailsjs/go/
+/frontend/wailsjs/
 
 # Wails build artifacts (if any)
 /frontend/build/

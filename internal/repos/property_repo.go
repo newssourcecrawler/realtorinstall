@@ -1,4 +1,3 @@
-// internal/repos/property_repo.go
 package repos
 
 import (
