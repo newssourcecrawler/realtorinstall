@@ -1,5 +1,5 @@
 import { runtime } from '@wailsapp/runtime2'
-import { PropertyService } from './wailsjs/go/main/App'
+import { ListProperties, CreateProperty } from './wailsjs/go/services/PropertyService'
 
 console.log("main.js loaded")
 
@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log("List All Properties clicked")
     try {
       // Use the exact exported name: PropertyService (capital P)
-      const props = await PropertyService.ListProperties()
+      const props = await ListProperties()
       if (props.length === 0) {
         content.innerHTML = '<p>No properties found.</p>'
         return
@@ -59,7 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
         BasePriceUSD: parseFloat(document.getElementById('price').value) || 0,
       }
       try {
-        const id = await PropertyService.CreateProperty(newProp)
+        const id = await CreateProperty(newProp)
         document.getElementById('result').innerHTML =
           `<p style="color:green;">Created property with ID: ${id}</p>`
       } catch (err) {

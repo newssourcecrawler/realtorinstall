@@ -1,5 +1,5 @@
 [project]
 name = "realtorinstall"
 module = "github.com/newssourcecrawler/realtorinstall"
-author = "Ismail Canga
+author = "Ismail Canga"
 description = "Realtor Installment Assistant"
