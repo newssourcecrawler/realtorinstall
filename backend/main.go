@@ -7,12 +7,14 @@ import (
 	"log"
 	"os"
 
-	v2 "github.com/wailsapp/wails/v2"
+	// 1) Import the Wails core package so CreateApp is available:
+	"github.com/wailsapp/wails/v2"
 
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/linux"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
 
+	// Our internal packages:
 	"github.com/newssourcecrawler/realtorinstall/internal/repos"
 	"github.com/newssourcecrawler/realtorinstall/internal/services"
 	"github.com/newssourcecrawler/realtorinstall/internal/utils"
@@ -66,7 +68,7 @@ func main() {
 	reportService := services.NewReportService(installmentRepo)
 
 	// 5. Build and run the Wails app, exporting our services to JS
-	app := v2.CreateApp(&options.App{
+	app := wails.CreateApp(&options.App{
 		Title:  "Realtor Installment Assistant",
 		Width:  1200,
 		Height: 800,
