@@ -6,3 +6,4 @@ import "errors"
 var ErrNotFound = errors.New("repo: not found")
 var NameEmailNotFound = errors.New("name and email are required")
 var IDNotFound = errors.New("invalid property ID")
+var AddrNotFound = errors.New("address and city cannot be empty")

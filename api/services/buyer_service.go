@@ -20,8 +20,8 @@ func NewBuyerService(r repos.BuyerRepo) *BuyerService {
 }
 
 func (s *BuyerService) CreateBuyer(ctx context.Context, b models.Buyer) (int64, error) {
-	if b.Name == "" || b.Email == "" {
-		return 0, NameEmailNotFound
+	if b.FirstName == "" || b.LastName == "" || b.Email == "" {
+		return 0, repos.NameEmailNotFound
 	}
 	b.CreatedAt = time.Now().Format(time.RFC3339)
 	b.LastModified = b.CreatedAt
@@ -46,16 +46,24 @@ func (s *BuyerService) UpdateBuyer(ctx context.Context, id string, b models.Buye
 	b.LastModified = time.Now().Format(time.RFC3339)
 	err := s.repo.Update(ctx, id, &b)
 	if err == repos.ErrNotFound {
-		return ErrNotFound
+		return repos.ErrNotFound
 	}
 	return err
 }
 
 // DeleteBuyer removes a buyer by ID. Returns ErrNotFound if not found.
 func (s *BuyerService) DeleteBuyer(ctx context.Context, id string) error {
-	err := s.repo.Delete(ctx, id)
+	b, err := s.repo.GetByID(ctx, id)
 	if err == repos.ErrNotFound {
-		return ErrNotFound
+		return repos.ErrNotFound
+	} else if err != nil {
+		return err
+	}
+	b.Deleted = true
+	b.LastModified = time.Now().Format(time.RFC3339)
+	err = s.repo.Update(ctx, id, b)
+	if err == repos.ErrNotFound {
+		return repos.ErrNotFound
 	}
 	return err
 }

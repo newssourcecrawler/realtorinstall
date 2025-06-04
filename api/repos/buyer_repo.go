@@ -11,5 +11,5 @@ type BuyerRepo interface {
 	GetByID(ctx context.Context, id string) (*models.Buyer, error)
 	ListAll(ctx context.Context) ([]*models.Buyer, error)
 	Update(ctx context.Context, id string, b *models.Buyer) error
-	//Delete(ctx context.Context, id int64) error
+	Delete(ctx context.Context, id int64) error
 }

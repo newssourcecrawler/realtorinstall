@@ -27,7 +27,8 @@ func main() {
 	if err != nil {
 		panic(fmt.Errorf("open property repo: %w", err))
 	}
-	pricingRepo, err := intRepos.NewSQLiteLocationPricingRepo("data/pricing.db")
+	//pricingRepo, err := intRepos.NewSQLiteLocationPricingRepo("data/pricing.db")
+	pricingRepo, err := apiRepos.NewSQLiteLocationPricingRepo("data/pricing.db")
 	if err != nil {
 		panic(fmt.Errorf("open pricing repo: %w", err))
 	}
