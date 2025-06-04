@@ -47,8 +47,6 @@ func main() {
 	router := gin.Default()
 	router.Use(cors.Default())
 
-	// ====== PROPERTY ROUTES ======
-
 	// GET /properties
 	router.GET("/properties", func(c *gin.Context) {
 		props, err := propSvc.ListProperties(context.Background())
@@ -82,8 +80,7 @@ func main() {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		// Ensure the ID field in the body matches the path param (optional):
-		p.ID = 0 // ignore any ID in JSON; let service use idParam
+		// Service will ignore any p.ID and rely on idParam
 		err := propSvc.UpdateProperty(context.Background(), idParam, p)
 		if err != nil {
 			if err == apiServices.ErrNotFound {

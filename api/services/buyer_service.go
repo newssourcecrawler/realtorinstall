@@ -23,8 +23,11 @@ func (s *BuyerService) CreateBuyer(ctx context.Context, b models.Buyer) (int64, 
 	if b.FirstName == "" || b.LastName == "" || b.Email == "" {
 		return 0, repos.NameEmailNotFound
 	}
-	b.CreatedAt = time.Now().Format(time.RFC3339)
+	now := time.Now().UTC()
+	//b.CreatedAt = time.Now().Format(time.RFC3339)
+	b.CreatedAt = now
 	b.LastModified = b.CreatedAt
+	b.Deleted = false
 	return s.repo.Create(ctx, &b)
 }
 
@@ -35,6 +38,9 @@ func (s *BuyerService) ListBuyers(ctx context.Context) ([]models.Buyer, error) {
 	}
 	var out []models.Buyer
 	for _, b := range bs {
+		if b.Deleted {
+			continue
+		}
 		out = append(out, *b)
 	}
 	return out, nil
@@ -43,7 +49,9 @@ func (s *BuyerService) ListBuyers(ctx context.Context) ([]models.Buyer, error) {
 // UpdateBuyer edits an existing buyer. Returns ErrNotFound if the repo signals no match.
 func (s *BuyerService) UpdateBuyer(ctx context.Context, id string, b models.Buyer) error {
 	// We ignore any ID in 'b' and rely on the repo.Update to use 'id' string.
-	b.LastModified = time.Now().Format(time.RFC3339)
+	//b.LastModified = time.Now().Format(time.RFC3339)
+	b.LastModified = time.Now().UTC()
+
 	err := s.repo.Update(ctx, id, &b)
 	if err == repos.ErrNotFound {
 		return repos.ErrNotFound
@@ -60,7 +68,8 @@ func (s *BuyerService) DeleteBuyer(ctx context.Context, id string) error {
 		return err
 	}
 	b.Deleted = true
-	b.LastModified = time.Now().Format(time.RFC3339)
+	b.LastModified = time.Now().UTC()
+	//b.LastModified = time.Now().Format(time.RFC3339)
 	err = s.repo.Update(ctx, id, b)
 	if err == repos.ErrNotFound {
 		return repos.ErrNotFound

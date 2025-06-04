@@ -28,11 +28,13 @@ func (s *PropertyService) CreateProperty(ctx context.Context, p models.Property)
 	}
 
 	// If ListingDate is empty, set it to now (RFC3339 string)
-	if p.ListingDate == "" {
-		p.ListingDate = time.Now().Format(time.RFC3339)
+	if p.ListingDate.IsZero() {
+		//p.ListingDate = time.Now().Format(time.RFC3339)
+		p.ListingDate = time.Now().UTC()
 	}
 	// Set created/modified timestamps to now
-	now := time.Now().Format(time.RFC3339)
+	//now := time.Now().Format(time.RFC3339)
+	now := time.Now().UTC()
 	p.CreatedAt = now
 	p.LastModified = now
 
@@ -59,7 +61,8 @@ func (s *PropertyService) UpdateProperty(ctx context.Context, id string, p model
 		return repos.IDNotFound
 	}
 	// Refresh LastModified
-	p.LastModified = time.Now().Format(time.RFC3339)
+	//p.LastModified = time.Now().Format(time.RFC3339)
+	p.LastModified = time.Now().UTC()
 
 	err := s.repo.Update(ctx, &p)
 	if err == repos.ErrNotFound {
@@ -68,10 +71,20 @@ func (s *PropertyService) UpdateProperty(ctx context.Context, id string, p model
 	return err
 }
 
-// DeleteProperty removes a property by ID. Returns ErrNotFound if not found.
+// DeleteProperty performs a soft‐delete (marks Deleted=true). Returns ErrNotFound if missing.
 func (s *PropertyService) DeleteProperty(ctx context.Context, id string) error {
-	// The repo.Delete method should handle converting id→int64 and return ErrNotFound if needed.
-	err := s.repo.Delete(ctx, id)
+	// 1) Load the existing record (even if it was previously soft‐deleted)
+	existing, err := s.repo.GetByID(ctx, id)
+	if err == repos.ErrNotFound {
+		return repos.ErrNotFound
+	} else if err != nil {
+		return err
+	}
+
+	// 2) Mark it as deleted
+	existing.Deleted = true
+	existing.LastModified = time.Now().UTC()
+	err = s.repo.Update(ctx, existing)
 	if err == repos.ErrNotFound {
 		return repos.ErrNotFound
 	}
