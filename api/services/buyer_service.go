@@ -47,7 +47,7 @@ func (s *BuyerService) ListBuyers(ctx context.Context) ([]models.Buyer, error) {
 }
 
 // UpdateBuyer edits an existing buyer. Returns ErrNotFound if the repo signals no match.
-func (s *BuyerService) UpdateBuyer(ctx context.Context, id string, b models.Buyer) error {
+func (s *BuyerService) UpdateBuyer(ctx context.Context, id int64, b models.Buyer) error {
 	// We ignore any ID in 'b' and rely on the repo.Update to use 'id' string.
 	//b.LastModified = time.Now().Format(time.RFC3339)
 	b.LastModified = time.Now().UTC()
@@ -60,7 +60,7 @@ func (s *BuyerService) UpdateBuyer(ctx context.Context, id string, b models.Buye
 }
 
 // DeleteBuyer removes a buyer by ID. Returns ErrNotFound if not found.
-func (s *BuyerService) DeleteBuyer(ctx context.Context, id string) error {
+func (s *BuyerService) DeleteBuyer(ctx context.Context, id int64) error {
 	b, err := s.repo.GetByID(ctx, id)
 	if err == repos.ErrNotFound {
 		return repos.ErrNotFound

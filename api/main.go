@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -96,8 +97,13 @@ func main() {
 
 	// DELETE /properties/:id  → delete a property
 	router.DELETE("/properties/:id", func(c *gin.Context) {
-		idParam := c.Param("id")
-		err := propSvc.DeleteProperty(context.Background(), idParam)
+		idStr := c.Param("id")
+		id64, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ID"})
+			return
+		}
+		err := propSvc.DeleteProperty(context.Background(), id64)
 		if err != nil {
 			if err == apiRepos.ErrNotFound {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Property not found"})
@@ -138,14 +144,20 @@ func main() {
 
 	// PUT /buyers/:id  → update a buyer
 	router.PUT("/buyers/:id", func(c *gin.Context) {
-		idParam := c.Param("id")
+		//idParam := c.Param("id")
+		idStr := c.Param("id")
+		id64, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ID"})
+			return
+		}
 		var b models.Buyer
 		if err := c.BindJSON(&b); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		b.ID = 0 // ignore any ID from JSON; service will use idParam
-		err := buyerSvc.UpdateBuyer(context.Background(), idParam, b)
+		err := buyerSvc.UpdateBuyer(context.Background(), id64, b)
 		if err != nil {
 			if err == apiRepos.ErrNotFound {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Buyer not found"})
@@ -159,8 +171,14 @@ func main() {
 
 	// DELETE /buyers/:id  → delete a buyer
 	router.DELETE("/buyers/:id", func(c *gin.Context) {
-		idParam := c.Param("id")
-		err := buyerSvc.DeleteBuyer(context.Background(), idParam)
+		//idParam := c.Param("id")
+		idStr := c.Param("id")
+		id64, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ID"})
+			return
+		}
+		err := buyerSvc.DeleteBuyer(context.Background(), id64)
 		if err != nil {
 			if err == apiRepos.ErrNotFound {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Buyer not found"})

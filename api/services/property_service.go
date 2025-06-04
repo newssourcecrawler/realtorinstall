@@ -72,7 +72,7 @@ func (s *PropertyService) UpdateProperty(ctx context.Context, id string, p model
 }
 
 // DeleteProperty performs a soft‐delete (marks Deleted=true). Returns ErrNotFound if missing.
-func (s *PropertyService) DeleteProperty(ctx context.Context, id string) error {
+func (s *PropertyService) DeleteProperty(ctx context.Context, id int64) error {
 	// 1) Load the existing record (even if it was previously soft‐deleted)
 	existing, err := s.repo.GetByID(ctx, id)
 	if err == repos.ErrNotFound {
