@@ -3,7 +3,8 @@ package repos
 import (
 	"context"
 	"database/sql"
-	"strconv"
+	"errors"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/newssourcecrawler/realtorinstall/api/models"
@@ -42,6 +43,11 @@ func NewSQLiteBuyerRepo(dbPath string) (BuyerRepo, error) {
 
 // Create inserts a new Buyer.
 func (r *sqliteBuyerRepo) Create(ctx context.Context, b *models.Buyer) (int64, error) {
+	if b.FirstName == "" || b.LastName == "" || b.Email == "" {
+		return 0, errors.New("first name, last name and email are required")
+		//return 0, repos.NameEmailNotFound
+	}
+
 	query := `
 	INSERT INTO buyers (first_name, last_name, email, phone, created_at, last_modified, deleted)
 	VALUES (?, ?, ?, ?, ?, ?, ?);
@@ -61,23 +67,18 @@ func (r *sqliteBuyerRepo) Create(ctx context.Context, b *models.Buyer) (int64, e
 	return res.LastInsertId()
 }
 
-// GetByID retrieves a Buyer by ID (even if soft‐deleted).
-func (r *sqliteBuyerRepo) GetByID(ctx context.Context, id string) (*models.Buyer, error) {
-	intID, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
-		return nil, ErrNotFound
-	}
-
+// GetByID retrieves a Buyer by ID (even if soft-deleted).
+func (r *sqliteBuyerRepo) GetByID(ctx context.Context, id int64) (*models.Buyer, error) {
 	query := `
 	SELECT id, first_name, last_name, email, phone, created_at, last_modified, deleted
 	FROM buyers
 	WHERE id = ?;
 	`
-	row := r.db.QueryRowContext(ctx, query, intID)
+	row := r.db.QueryRowContext(ctx, query, id)
 
 	var b models.Buyer
 	var deletedInt int
-	err = row.Scan(
+	err := row.Scan(
 		&b.ID,
 		&b.FirstName,
 		&b.LastName,
@@ -97,7 +98,7 @@ func (r *sqliteBuyerRepo) GetByID(ctx context.Context, id string) (*models.Buyer
 	return &b, nil
 }
 
-// ListAll returns all non‐deleted Buyers.
+// ListAll returns all non-deleted Buyers.
 func (r *sqliteBuyerRepo) ListAll(ctx context.Context) ([]*models.Buyer, error) {
 	query := `
 	SELECT id, first_name, last_name, email, phone, created_at, last_modified, deleted
@@ -110,7 +111,7 @@ func (r *sqliteBuyerRepo) ListAll(ctx context.Context) ([]*models.Buyer, error) 
 	}
 	defer rows.Close()
 
-	var results []*models.Buyer
+	var out []*models.Buyer
 	for rows.Next() {
 		var b models.Buyer
 		var deletedInt int
@@ -127,16 +128,17 @@ func (r *sqliteBuyerRepo) ListAll(ctx context.Context) ([]*models.Buyer, error) 
 			return nil, err
 		}
 		b.Deleted = intToBool(deletedInt)
-		results = append(results, &b)
+		out = append(out, &b)
 	}
-	return results, nil
+	return out, nil
 }
 
 // Update modifies an existing Buyer (including the Deleted flag).
-func (r *sqliteBuyerRepo) Update(ctx context.Context, id string, b *models.Buyer) error {
-	intID, err := strconv.ParseInt(id, 10, 64)
+func (r *sqliteBuyerRepo) Update(ctx context.Context, id int64, b *models.Buyer) error {
+	// Check existence first (optional; service may already have done this).
+	_, err := r.GetByID(ctx, id)
 	if err != nil {
-		return ErrNotFound
+		return err
 	}
 
 	query := `
@@ -144,21 +146,40 @@ func (r *sqliteBuyerRepo) Update(ctx context.Context, id string, b *models.Buyer
 	SET first_name = ?, last_name = ?, email = ?, phone = ?, last_modified = ?, deleted = ?
 	WHERE id = ?;
 	`
-	_, err = r.db.ExecContext(
-		ctx,
-		query,
+	_, err = r.db.ExecContext(ctx, query,
 		b.FirstName,
 		b.LastName,
 		b.Email,
 		b.Phone,
 		b.LastModified,
 		boolToInt(b.Deleted),
-		intID,
+		id,
 	)
 	return err
 }
 
-// intToBool converts 0/1 → bool.
+// Delete performs a soft-delete (sets deleted = 1).
+func (r *sqliteBuyerRepo) Delete(ctx context.Context, id int64) error {
+	// Confirm existence
+	_, err := r.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	query := `
+	UPDATE buyers
+	SET deleted = 1, last_modified = ?
+	WHERE id = ?;
+	`
+	_, err = r.db.ExecContext(ctx, query, nowUTCString(), id)
+	return err
+}
+
+// Helper: convert 0/1 → bool
 func intToBool(i int) bool {
 	return i != 0
+}
+
+// nowUTCString returns current UTC time formatted for SQLite.
+func nowUTCString() string {
+	return time.Now().UTC().Format("2006-01-02 15:04:05")
 }

@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-
-	//"errors"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"

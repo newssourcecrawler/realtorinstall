@@ -55,7 +55,7 @@ func (s *PropertyService) ListProperties(ctx context.Context) ([]models.Property
 }
 
 // UpdateProperty edits an existing property. Returns ErrNotFound if the repo signals no match.
-func (s *PropertyService) UpdateProperty(ctx context.Context, id string, p models.Property) error {
+func (s *PropertyService) UpdateProperty(ctx context.Context, id int64, p models.Property) error {
 	// Convert id (string) to int64 inside the repo layer; assume the repo.Update returns ErrNotFound when not found.
 	if p.ID == 0 {
 		return repos.IDNotFound

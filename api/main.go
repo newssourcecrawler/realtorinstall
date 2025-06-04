@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/newssourcecrawler/realtorinstall/api/models"
+	"github.com/newssourcecrawler/realtorinstall/api/repos"
 	apiRepos "github.com/newssourcecrawler/realtorinstall/api/repos"
 	apiServices "github.com/newssourcecrawler/realtorinstall/api/services"
 )
@@ -28,31 +29,31 @@ func main() {
 	if err != nil {
 		panic(fmt.Errorf("open property repo: %w", err))
 	}
-	//pricingRepo, err := intRepos.NewSQLiteLocationPricingRepo("data/pricing.db")
 	pricingRepo, err := apiRepos.NewSQLiteLocationPricingRepo("data/pricing.db")
 	if err != nil {
 		panic(fmt.Errorf("open pricing repo: %w", err))
 	}
 
-	// 3. Construct services
-	propSvc := apiServices.NewPropertyService(propRepo, pricingRepo)
-
-	// Buyer service (you must have a BuyerRepo under api/repos and service under api/services)
 	buyerRepo, err := apiRepos.NewSQLiteBuyerRepo("data/buyers.db")
 	if err != nil {
 		panic(fmt.Errorf("open buyer repo: %w", err))
 	}
+
+	// 3. Construct services
+	propSvc := apiServices.NewPropertyService(propRepo, pricingRepo)
 	buyerSvc := apiServices.NewBuyerService(buyerRepo)
 
 	// 4. Build Gin router
 	router := gin.Default()
 	router.Use(cors.Default())
 
+	// ====== PROPERTY ROUTES ======
+
 	// GET /properties
 	router.GET("/properties", func(c *gin.Context) {
-		props, err := propSvc.ListProperties(context.Background())
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		props, svcErr := propSvc.ListProperties(context.Background())
+		if svcErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": svcErr.Error()})
 			return
 		}
 		c.JSON(http.StatusOK, props)
@@ -61,13 +62,22 @@ func main() {
 	// POST /properties
 	router.POST("/properties", func(c *gin.Context) {
 		var p models.Property
-		if err := c.BindJSON(&p); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if bindErr := c.BindJSON(&p); bindErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": bindErr.Error()})
 			return
 		}
-		id, err := propSvc.CreateProperty(context.Background(), p)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		// Set CreatedAt / LastModified here, if not already set:
+		if p.CreatedAt.IsZero() {
+			p.CreatedAt = time.Now().UTC()
+		}
+		if p.LastModified.IsZero() {
+			p.LastModified = time.Now().UTC()
+		}
+		p.Deleted = false
+
+		id, svcErr := propSvc.CreateProperty(context.Background(), p)
+		if svcErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": svcErr.Error()})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"id": id})
@@ -75,41 +85,49 @@ func main() {
 
 	// PUT /properties/:id  → update an existing property
 	router.PUT("/properties/:id", func(c *gin.Context) {
-		idParam := c.Param("id")
-		var p models.Property
-		if err := c.BindJSON(&p); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		idStr := c.Param("id")
+		id64, parseErr := strconv.ParseInt(idStr, 10, 64)
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid property ID"})
 			return
 		}
-		// Ensure the ID field in the body matches the path param (optional):
-		//p.ID = 0 // ignore any ID in JSON; let service use idParam
-		err := propSvc.UpdateProperty(context.Background(), idParam, p)
-		if err != nil {
-			if err == apiRepos.ErrNotFound {
+
+		var p models.Property
+		if bindErr := c.BindJSON(&p); bindErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": bindErr.Error()})
+			return
+		}
+		// Overwrite any JSON‐sent ID so service uses path param:
+		p.ID = id64
+		p.LastModified = time.Now().UTC()
+
+		svcErr := propSvc.UpdateProperty(context.Background(), id64, p)
+		if svcErr != nil {
+			if svcErr == repos.ErrNotFound {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Property not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": svcErr.Error()})
 			return
 		}
 		c.Status(http.StatusOK)
 	})
 
-	// DELETE /properties/:id  → delete a property
+	// DELETE /properties/:id  → soft-delete a property
 	router.DELETE("/properties/:id", func(c *gin.Context) {
 		idStr := c.Param("id")
-		id64, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ID"})
+		id64, parseErr := strconv.ParseInt(idStr, 10, 64)
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid property ID"})
 			return
 		}
-		err := propSvc.DeleteProperty(context.Background(), id64)
-		if err != nil {
-			if err == apiRepos.ErrNotFound {
+		svcErr := propSvc.DeleteProperty(context.Background(), id64)
+		if svcErr != nil {
+			if svcErr == repos.ErrNotFound {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Property not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": svcErr.Error()})
 			return
 		}
 		c.Status(http.StatusOK)
@@ -119,9 +137,9 @@ func main() {
 
 	// GET /buyers
 	router.GET("/buyers", func(c *gin.Context) {
-		bs, err := buyerSvc.ListBuyers(context.Background())
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		bs, svcErr := buyerSvc.ListBuyers(context.Background())
+		if svcErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": svcErr.Error()})
 			return
 		}
 		c.JSON(http.StatusOK, bs)
@@ -130,13 +148,22 @@ func main() {
 	// POST /buyers
 	router.POST("/buyers", func(c *gin.Context) {
 		var b models.Buyer
-		if err := c.BindJSON(&b); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if bindErr := c.BindJSON(&b); bindErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": bindErr.Error()})
 			return
 		}
-		id, err := buyerSvc.CreateBuyer(context.Background(), b)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		// Stamp timestamps:
+		if b.CreatedAt.IsZero() {
+			b.CreatedAt = time.Now().UTC()
+		}
+		if b.LastModified.IsZero() {
+			b.LastModified = time.Now().UTC()
+		}
+		b.Deleted = false
+
+		id, svcErr := buyerSvc.CreateBuyer(context.Background(), b)
+		if svcErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": svcErr.Error()})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"id": id})
@@ -144,59 +171,59 @@ func main() {
 
 	// PUT /buyers/:id  → update a buyer
 	router.PUT("/buyers/:id", func(c *gin.Context) {
-		//idParam := c.Param("id")
 		idStr := c.Param("id")
-		id64, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ID"})
+		id64, parseErr := strconv.ParseInt(idStr, 10, 64)
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid buyer ID"})
 			return
 		}
+
 		var b models.Buyer
-		if err := c.BindJSON(&b); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if bindErr := c.BindJSON(&b); bindErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": bindErr.Error()})
 			return
 		}
-		b.ID = 0 // ignore any ID from JSON; service will use idParam
-		err := buyerSvc.UpdateBuyer(context.Background(), id64, b)
-		if err != nil {
-			if err == apiRepos.ErrNotFound {
+		b.ID = id64
+		b.LastModified = time.Now().UTC()
+
+		svcErr := buyerSvc.UpdateBuyer(context.Background(), id64, b)
+		if svcErr != nil {
+			if svcErr == repos.ErrNotFound {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Buyer not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": svcErr.Error()})
 			return
 		}
 		c.Status(http.StatusOK)
 	})
 
-	// DELETE /buyers/:id  → delete a buyer
+	// DELETE /buyers/:id  → soft-delete a buyer
 	router.DELETE("/buyers/:id", func(c *gin.Context) {
-		//idParam := c.Param("id")
 		idStr := c.Param("id")
-		id64, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ID"})
+		id64, parseErr := strconv.ParseInt(idStr, 10, 64)
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid buyer ID"})
 			return
 		}
-		err := buyerSvc.DeleteBuyer(context.Background(), id64)
-		if err != nil {
-			if err == apiRepos.ErrNotFound {
+		svcErr := buyerSvc.DeleteBuyer(context.Background(), id64)
+		if svcErr != nil {
+			if svcErr == repos.ErrNotFound {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Buyer not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": svcErr.Error()})
 			return
 		}
 		c.Status(http.StatusOK)
 	})
 
-	// 5. Create http.Server with Gin as handler
+	// 5. Start HTTP server with graceful shutdown
 	srv := &http.Server{
 		Addr:    ":8080",
 		Handler: router,
 	}
 
-	// 6. Run server in a goroutine
 	go func() {
 		fmt.Println("API listening on http://localhost:8080")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -205,18 +232,16 @@ func main() {
 		}
 	}()
 
-	// 7. Wait for interrupt signal (Ctrl+C)
+	// 6. Graceful shutdown on Ctrl+C
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt)
 	<-quit
 	fmt.Println("Shutting down API server...")
 
-	// 8. Attempt graceful shutdown with a timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "Server forced to shutdown: %v\n", err)
 	}
-
 	fmt.Println("API server stopped.")
 }

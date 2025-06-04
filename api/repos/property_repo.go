@@ -12,5 +12,5 @@ type PropertyRepo interface {
 	GetByID(ctx context.Context, id int64) (*models.Property, error)
 	ListAll(ctx context.Context) ([]*models.Property, error)
 	Update(ctx context.Context, p *models.Property) error
-	Delete(ctx context.Context, id string) error
+	Delete(ctx context.Context, id int64) error
 }
