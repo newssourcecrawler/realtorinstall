@@ -62,7 +62,7 @@ func (r *sqlitePropertyRepo) Create(ctx context.Context, p *models.Property) (in
 // GetByID retrieves a Property by ID.
 func (r *sqlitePropertyRepo) GetByID(ctx context.Context, id int64) (*models.Property, error) {
 	query := `
-	SELECT id, address, city, zip, listing_date, created_at, last_modified
+	SELECT id, address, city, zip, listing_date, created_at, last_modified, deleted
 	FROM properties WHERE id = ?;
 	`
 	row := r.db.QueryRowContext(ctx, query, id)
@@ -75,6 +75,7 @@ func (r *sqlitePropertyRepo) GetByID(ctx context.Context, id int64) (*models.Pro
 		&p.ListingDate,
 		&p.CreatedAt,
 		&p.LastModified,
+		&p.Deleted,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -88,8 +89,8 @@ func (r *sqlitePropertyRepo) GetByID(ctx context.Context, id int64) (*models.Pro
 // ListAll returns all Properties.
 func (r *sqlitePropertyRepo) ListAll(ctx context.Context) ([]*models.Property, error) {
 	query := `
-	SELECT id, address, city, zip, listing_date, created_at, last_modified
-	FROM properties;
+	SELECT id, address, city, zip, listing_date, created_at, last_modified, deleted 
+	FROM properties WHERE deleted = 0
 	`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -108,7 +109,7 @@ func (r *sqlitePropertyRepo) ListAll(ctx context.Context) ([]*models.Property, e
 			&p.ListingDate,
 			&p.CreatedAt,
 			&p.LastModified,
-		); err != nil {
+			&p.Deleted); err != nil {
 			return nil, err
 		}
 		props = append(props, &p)
@@ -120,8 +121,9 @@ func (r *sqlitePropertyRepo) ListAll(ctx context.Context) ([]*models.Property, e
 func (r *sqlitePropertyRepo) Update(ctx context.Context, p *models.Property) error {
 	query := `
 	UPDATE properties
-	SET address = ?, city = ?, zip = ?, listing_date = ?, created_at = ?, last_modified = ?
-	WHERE id = ?;
+	SET address=?, city=?, zip=?, listing_date=?, last_modified=?, deleted=? 
+	WHERE id = ?", 
+	p.Address, p.City, p.ZIP, p.ListingDate, p.LastModified, p.Deleted, p.ID
 	`
 	_, err := r.db.ExecContext(ctx, query,
 		p.Address,
@@ -136,8 +138,8 @@ func (r *sqlitePropertyRepo) Update(ctx context.Context, p *models.Property) err
 }
 
 // Delete removes a Property by ID.
-func (r *sqlitePropertyRepo) Delete(ctx context.Context, id int64) error {
-	query := `DELETE FROM properties WHERE id = ?;`
-	_, err := r.db.ExecContext(ctx, query, id)
-	return err
-}
+//func (r *sqlitePropertyRepo) Delete(ctx context.Context, id int64) error {
+//	query := `DELETE FROM properties WHERE id = ?;`
+//	_, err := r.db.ExecContext(ctx, query, id)
+//	return err
+//}

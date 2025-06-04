@@ -18,10 +18,11 @@ func NewBuyerService(r repos.BuyerRepo) *BuyerService {
 }
 
 func (s *BuyerService) CreateBuyer(ctx context.Context, b models.Buyer) (int64, error) {
-	if b.FirstName == "" || b.LastName == "" {
-		return 0, errors.New("first and last name are required")
+	if b.Name == "" {
+		return 0, errors.New("name is required")
 	}
-	b.CreatedAt = time.Now().UTC()
+	now := time.Now().UTC().Format(time.RFC3339)
+	b.CreatedAt = now
 	b.LastModified = b.CreatedAt
 	return s.repo.Create(ctx, &b)
 }
