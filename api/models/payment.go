@@ -12,4 +12,7 @@ type Payment struct {
 	TransactionRef string    `json:"transaction_ref"` // Bank transaction ID or check number
 	CreatedAt      time.Time `json:"created_at"`      // When this record was created
 	LastModified   time.Time `json:"last_modified"`   // When last updated
+	CreatedBy      string    `json:"created_by"`
+	ModifiedBy     string    `json:"modified_by"`
+	Deleted        bool      `json:"deleted"`
 }

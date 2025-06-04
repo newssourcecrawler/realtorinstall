@@ -15,4 +15,7 @@ type InstallmentPlan struct {
 	InterestRate     float64   `json:"interest_rate"`     // Annual interest % (if any)
 	CreatedAt        time.Time `json:"created_at"`        // When plan was created
 	LastModified     time.Time `json:"last_modified"`     // When plan was last modified
+	CreatedBy        string    `json:"created_by"`
+	ModifiedBy       string    `json:"modified_by"`
+	Deleted          bool      `json:"deleted"`
 }

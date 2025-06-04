@@ -158,14 +158,6 @@ func (r *sqliteBuyerRepo) Update(ctx context.Context, id string, b *models.Buyer
 	return err
 }
 
-// boolToInt converts a bool → 0/1 for SQLite.
-func boolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}
-
 // intToBool converts 0/1 → bool.
 func intToBool(i int) bool {
 	return i != 0

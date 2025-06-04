@@ -11,4 +11,7 @@ type LocationPricing struct {
 	EffectiveDate time.Time `json:"effective_date"` // When this rate takes effect
 	CreatedAt     time.Time `json:"created_at"`     // When this record was created
 	LastModified  time.Time `json:"last_modified"`  // When last updated
+	CreatedBy     string    `json:"created_by"`
+	ModifiedBy    string    `json:"modified_by"`
+	Deleted       bool      `json:"deleted"`
 }
