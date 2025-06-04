@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -40,12 +41,32 @@ func main() {
 	}
 
 	// 3. Construct services
-	propSvc := apiServices.NewPropertyService(propRepo, pricingRepo)
-	buyerSvc := apiServices.NewBuyerService(buyerRepo)
+	userRepo, _ := apiRepos.NewSQLiteUserRepo("data/users.db")
+	authSvc := apiServices.NewAuthService(userRepo)
+	//propSvc := apiServices.NewPropertyService(propRepo, pricingRepo)
+	propSvc := apiServices.NewPropertyService(propRepo, pricingRepo, userRepo)
+	//buyerSvc := apiServices.NewBuyerService(buyerRepo)
+	buyerSvc := apiServices.NewBuyerService(buyerRepo, userRepo)
 
 	// 4. Build Gin router
 	router := gin.Default()
 	router.Use(cors.Default())
+
+	// handler for POST /login
+	router.POST("/login", func(c *gin.Context) {
+		var creds struct{ Username, Password string }
+		if err := c.BindJSON(&creds); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+		user, err := authSvc.Authenticate(c.Request.Context(), creds.Username, creds.Password)
+		if err != nil {
+			c.JSON(401, gin.H{"error": "invalid credentials"})
+			return
+		}
+		tokenString, _ := jwt.GenerateToken(user.ID, user.Role) // e.g. with a secret
+		c.JSON(200, gin.H{"token": tokenString})
+	})
 
 	// ====== PROPERTY ROUTES ======
 
@@ -244,4 +265,24 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Server forced to shutdown: %v\n", err)
 	}
 	fmt.Println("API server stopped.")
+}
+
+func AuthMiddleware(secret string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			c.AbortWithStatusJSON(401, gin.H{"error": "missing bearer token"})
+			return
+		}
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		claims, err := jwt.ParseToken(tokenString, secret)
+		if err != nil {
+			c.AbortWithStatusJSON(401, gin.H{"error": "invalid token"})
+			return
+		}
+		// claims.UserID, claims.Role
+		c.Set("currentUserID", claims.UserID)
+		c.Set("currentUserRole", claims.Role)
+		c.Next()
+	}
 }
