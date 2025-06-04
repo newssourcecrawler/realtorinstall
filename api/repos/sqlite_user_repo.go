@@ -21,20 +21,20 @@ func NewSQLiteUserRepo(dbPath string) (UserRepo, error) {
 	}
 	schema := `
 	CREATE TABLE IF NOT EXISTS users (
-	  id INTEGER PRIMARY KEY AUTOINCREMENT,
-	  tenant_id TEXT NOT NULL,
-	  username TEXT NOT NULL UNIQUE,
-	  password_hash TEXT NOT NULL,
-	  first_name TEXT NOT NULL,
-	  last_name TEXT NOT NULL,
-	  role TEXT NOT NULL,
-	  email TEXT NOT NULL,
-	  phone TEXT,
-	  created_by TEXT NOT NULL,
-	  created_at DATETIME NOT NULL,
-	  modified_by TEXT NOT NULL,
+	  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+	  tenant_id     TEXT    NOT NULL,
+	  username      TEXT    NOT NULL UNIQUE,
+	  password_hash TEXT    NOT NULL,
+	  first_name    TEXT    NOT NULL,
+	  last_name     TEXT    NOT NULL,
+	  role          TEXT    NOT NULL,
+	  email         TEXT    NOT NULL,
+	  phone         TEXT,
+	  created_by    TEXT    NOT NULL,
+	  created_at    DATETIME NOT NULL,
+	  modified_by   TEXT    NOT NULL,
 	  last_modified DATETIME NOT NULL,
-	  deleted INTEGER NOT NULL DEFAULT 0
+	  deleted       INTEGER NOT NULL DEFAULT 0
 	);
 	CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);
 	`
@@ -45,12 +45,21 @@ func NewSQLiteUserRepo(dbPath string) (UserRepo, error) {
 }
 
 func (r *sqliteUserRepo) Create(ctx context.Context, u *models.User) (int64, error) {
-	if u.TenantID == "" || u.UserName == "" || u.PasswordHash == "" || u.FirstName == "" || u.LastName == "" || u.Role == "" || u.Email == "" || u.CreatedBy == "" || u.ModifiedBy == "" {
+	if u.TenantID == "" ||
+		u.UserName == "" ||
+		u.PasswordHash == "" ||
+		u.FirstName == "" ||
+		u.LastName == "" ||
+		u.Role == "" ||
+		u.Email == "" ||
+		u.CreatedBy == "" ||
+		u.ModifiedBy == "" {
 		return 0, errors.New("missing required fields or tenant/audit info")
 	}
 	now := time.Now().UTC()
 	u.CreatedAt = now
 	u.LastModified = now
+
 	query := `
 	INSERT INTO users (
 	  tenant_id, username, password_hash, first_name, last_name, role, email, phone,
@@ -85,6 +94,7 @@ func (r *sqliteUserRepo) GetByID(ctx context.Context, tenantID string, id int64)
 	WHERE tenant_id = ? AND id = ? AND deleted = 0;
 	`
 	row := r.db.QueryRowContext(ctx, query, tenantID, id)
+
 	var u models.User
 	var deletedInt int
 	err := row.Scan(
@@ -109,7 +119,7 @@ func (r *sqliteUserRepo) GetByID(ctx context.Context, tenantID string, id int64)
 	if err != nil {
 		return nil, err
 	}
-	u.Deleted = deletedInt != 0
+	u.Deleted = (deletedInt != 0)
 	return &u, nil
 }
 
@@ -121,6 +131,7 @@ func (r *sqliteUserRepo) GetByUsername(ctx context.Context, tenantID, username s
 	WHERE tenant_id = ? AND username = ? AND deleted = 0;
 	`
 	row := r.db.QueryRowContext(ctx, query, tenantID, username)
+
 	var u models.User
 	var deletedInt int
 	err := row.Scan(
@@ -145,8 +156,49 @@ func (r *sqliteUserRepo) GetByUsername(ctx context.Context, tenantID, username s
 	if err != nil {
 		return nil, err
 	}
-	u.Deleted = deletedInt != 0
+	u.Deleted = (deletedInt != 0)
 	return &u, nil
+}
+
+func (r *sqliteUserRepo) ListAll(ctx context.Context, tenantID string) ([]*models.User, error) {
+	query := `
+	SELECT id, tenant_id, username, password_hash, first_name, last_name, role, email, phone,
+	       created_by, created_at, modified_by, last_modified, deleted
+	FROM users
+	WHERE tenant_id = ? AND deleted = 0;
+	`
+	rows, err := r.db.QueryContext(ctx, query, tenantID) // <-- use QueryContext, not QueryRowContext
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*models.User
+	for rows.Next() {
+		var u models.User
+		var deletedInt int
+		if err := rows.Scan(
+			&u.ID,
+			&u.TenantID,
+			&u.UserName,
+			&u.PasswordHash,
+			&u.FirstName,
+			&u.LastName,
+			&u.Role,
+			&u.Email,
+			&u.Phone,
+			&u.CreatedBy,
+			&u.CreatedAt,
+			&u.ModifiedBy,
+			&u.LastModified,
+			&deletedInt,
+		); err != nil {
+			return nil, err
+		}
+		u.Deleted = (deletedInt != 0)
+		out = append(out, &u)
+	}
+	return out, nil
 }
 
 func (r *sqliteUserRepo) Update(ctx context.Context, u *models.User) error {
@@ -159,6 +211,7 @@ func (r *sqliteUserRepo) Update(ctx context.Context, u *models.User) error {
 	}
 	now := time.Now().UTC()
 	u.LastModified = now
+
 	query := `
 	UPDATE users
 	SET username = ?, password_hash = ?, first_name = ?, last_name = ?, role = ?, email = ?, phone = ?, modified_by = ?, last_modified = ?, deleted = ?

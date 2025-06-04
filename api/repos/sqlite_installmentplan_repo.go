@@ -1,4 +1,5 @@
 // api/repos/sqlite_installmentplan_repo.go
+
 package repos
 
 import (
@@ -54,6 +55,7 @@ func (r *sqliteInstallmentPlanRepo) Create(ctx context.Context, p *models.Instal
 	now := time.Now().UTC()
 	p.CreatedAt = now
 	p.LastModified = now
+
 	query := `
 	INSERT INTO installment_plans (
 	  tenant_id, property_id, buyer_id, total_price, down_payment, num_installments, frequency, first_installment, interest_rate,
@@ -89,6 +91,7 @@ func (r *sqliteInstallmentPlanRepo) GetByID(ctx context.Context, tenantID string
 	WHERE tenant_id = ? AND id = ? AND deleted = 0;
 	`
 	row := r.db.QueryRowContext(ctx, query, tenantID, id)
+
 	var p models.InstallmentPlan
 	var deletedInt int
 	err := row.Scan(
@@ -130,6 +133,49 @@ func (r *sqliteInstallmentPlanRepo) ListAll(ctx context.Context, tenantID string
 		return nil, err
 	}
 	defer rows.Close()
+
+	var out []*models.InstallmentPlan
+	for rows.Next() {
+		var p models.InstallmentPlan
+		var deletedInt int
+		if err := rows.Scan(
+			&p.ID,
+			&p.TenantID,
+			&p.PropertyID,
+			&p.BuyerID,
+			&p.TotalPrice,
+			&p.DownPayment,
+			&p.NumInstallments,
+			&p.Frequency,
+			&p.FirstInstallment,
+			&p.InterestRate,
+			&p.CreatedBy,
+			&p.CreatedAt,
+			&p.ModifiedBy,
+			&p.LastModified,
+			&deletedInt,
+		); err != nil {
+			return nil, err
+		}
+		p.Deleted = deletedInt != 0
+		out = append(out, &p)
+	}
+	return out, nil
+}
+
+func (r *sqliteInstallmentPlanRepo) ListByPlan(ctx context.Context, tenantID string, planID int64) ([]*models.InstallmentPlan, error) {
+	query := `
+	SELECT id, tenant_id, property_id, buyer_id, total_price, down_payment, num_installments, frequency, first_installment, interest_rate,
+	       created_by, created_at, modified_by, last_modified, deleted
+	FROM installment_plans
+	WHERE tenant_id = ? AND id = ? AND deleted = 0;
+	`
+	rows, err := r.db.QueryContext(ctx, query, tenantID, planID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
 	var out []*models.InstallmentPlan
 	for rows.Next() {
 		var p models.InstallmentPlan
@@ -169,6 +215,7 @@ func (r *sqliteInstallmentPlanRepo) Update(ctx context.Context, p *models.Instal
 	}
 	now := time.Now().UTC()
 	p.LastModified = now
+
 	query := `
 	UPDATE installment_plans
 	SET property_id = ?, buyer_id = ?, total_price = ?, down_payment = ?, num_installments = ?, frequency = ?, first_installment = ?, interest_rate = ?,

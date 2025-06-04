@@ -20,12 +20,12 @@ import (
 )
 
 func main() {
-	// 1. Ensure data folder exists (for SQLite)
+	// 1. Ensure data folder exists
 	if err := os.MkdirAll("data", 0755); err != nil {
 		panic(fmt.Errorf("mkdir data: %w", err))
 	}
 
-	// 2. Initialize repos
+	// 2. Initialize repositories
 	propRepo, err := apiRepos.NewSQLitePropertyRepo("data/properties.db")
 	if err != nil {
 		panic(fmt.Errorf("open property repo: %w", err))
@@ -34,45 +34,32 @@ func main() {
 	if err != nil {
 		panic(fmt.Errorf("open pricing repo: %w", err))
 	}
-
 	buyerRepo, err := apiRepos.NewSQLiteBuyerRepo("data/buyers.db")
 	if err != nil {
 		panic(fmt.Errorf("open buyer repo: %w", err))
 	}
+	userRepo, err := apiRepos.NewSQLiteUserRepo("data/users.db")
+	if err != nil {
+		panic(fmt.Errorf("open user repo: %w", err))
+	}
 
 	// 3. Construct services
-	userRepo, _ := apiRepos.NewSQLiteUserRepo("data/users.db")
 	authSvc := apiServices.NewAuthService(userRepo)
-	//propSvc := apiServices.NewPropertyService(propRepo, pricingRepo)
 	propSvc := apiServices.NewPropertyService(propRepo, pricingRepo, userRepo)
-	//buyerSvc := apiServices.NewBuyerService(buyerRepo)
 	buyerSvc := apiServices.NewBuyerService(buyerRepo, userRepo)
 
-	// 4. Build Gin router
+	// 4. Build Gin router with CORS and authentication middleware
 	router := gin.Default()
 	router.Use(cors.Default())
+	router.Use(AuthMiddleware("YOUR_JWT_SECRET"))
 
-	// handler for POST /login
-	router.POST("/login", func(c *gin.Context) {
-		var creds struct{ Username, Password string }
-		if err := c.BindJSON(&creds); err != nil {
-			c.JSON(400, gin.H{"error": err.Error()})
-			return
-		}
-		user, err := authSvc.Authenticate(c.Request.Context(), creds.Username, creds.Password)
-		if err != nil {
-			c.JSON(401, gin.H{"error": "invalid credentials"})
-			return
-		}
-		tokenString, _ := jwt.GenerateToken(user.ID, user.Role) // e.g. with a secret
-		c.JSON(200, gin.H{"token": tokenString})
-	})
-
-	// ====== PROPERTY ROUTES ======
+	// PROPERTY ROUTES
 
 	// GET /properties
 	router.GET("/properties", func(c *gin.Context) {
-		props, svcErr := propSvc.ListProperties(context.Background())
+		tenantID := c.GetString("currentTenant")
+		currentUser := c.GetString("currentUser")
+		props, svcErr := propSvc.ListProperties(c.Request.Context(), tenantID)
 		if svcErr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": svcErr.Error()})
 			return
@@ -80,21 +67,10 @@ func main() {
 		c.JSON(http.StatusOK, props)
 	})
 
-	// Inside main.go, after setting up router and injecting services…
-
-	// Middleware should have done:
-	//    c.Set("currentUser", "jane.doe")
-	//    c.Set("currentTenant", "8a5e1f8c-40f0-4f2a-9ae5-e2c9dfd2e0f9")
-
-	// Example: Create Property
+	// POST /properties
 	router.POST("/properties", func(c *gin.Context) {
 		tenantID := c.GetString("currentTenant")
 		currentUser := c.GetString("currentUser")
-		if tenantID == "" || currentUser == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "missing tenant or user context"})
-			return
-		}
-
 		var p models.Property
 		if err := c.BindJSON(&p); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -108,7 +84,7 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"id": id})
 	})
 
-	// Example: Update Property
+	// PUT /properties/:id
 	router.PUT("/properties/:id", func(c *gin.Context) {
 		tenantID := c.GetString("currentTenant")
 		currentUser := c.GetString("currentUser")
@@ -125,8 +101,8 @@ func main() {
 		}
 		svcErr := propSvc.UpdateProperty(c.Request.Context(), tenantID, currentUser, id64, p)
 		if svcErr != nil {
-			if svcErr == apiServices.ErrNotFound {
-				c.JSON(http.StatusNotFound, gin.H{"error": "property not found"})
+			if svcErr == repos.ErrNotFound {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Property not found"})
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": svcErr.Error()})
@@ -135,15 +111,17 @@ func main() {
 		c.Status(http.StatusOK)
 	})
 
-	// DELETE /properties/:id  → soft-delete a property
+	// DELETE /properties/:id
 	router.DELETE("/properties/:id", func(c *gin.Context) {
+		tenantID := c.GetString("currentTenant")
+		currentUser := c.GetString("currentUser")
 		idStr := c.Param("id")
 		id64, parseErr := strconv.ParseInt(idStr, 10, 64)
 		if parseErr != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid property ID"})
 			return
 		}
-		svcErr := propSvc.DeleteProperty(context.Background(), id64)
+		svcErr := propSvc.DeleteProperty(c.Request.Context(), tenantID, currentUser, id64)
 		if svcErr != nil {
 			if svcErr == repos.ErrNotFound {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Property not found"})
@@ -155,11 +133,12 @@ func main() {
 		c.Status(http.StatusOK)
 	})
 
-	// ====== BUYER ROUTES ======
+	// BUYER ROUTES
 
 	// GET /buyers
 	router.GET("/buyers", func(c *gin.Context) {
-		bs, svcErr := buyerSvc.ListBuyers(context.Background())
+		tenantID := c.GetString("currentTenant")
+		bs, svcErr := buyerSvc.ListBuyers(c.Request.Context(), tenantID)
 		if svcErr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": svcErr.Error()})
 			return
@@ -169,21 +148,14 @@ func main() {
 
 	// POST /buyers
 	router.POST("/buyers", func(c *gin.Context) {
+		tenantID := c.GetString("currentTenant")
+		currentUser := c.GetString("currentUser")
 		var b models.Buyer
 		if bindErr := c.BindJSON(&b); bindErr != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": bindErr.Error()})
 			return
 		}
-		// Stamp timestamps:
-		if b.CreatedAt.IsZero() {
-			b.CreatedAt = time.Now().UTC()
-		}
-		if b.LastModified.IsZero() {
-			b.LastModified = time.Now().UTC()
-		}
-		b.Deleted = false
-
-		id, svcErr := buyerSvc.CreateBuyer(context.Background(), b)
+		id, svcErr := buyerSvc.CreateBuyer(c.Request.Context(), tenantID, currentUser, b)
 		if svcErr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": svcErr.Error()})
 			return
@@ -191,24 +163,22 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"id": id})
 	})
 
-	// PUT /buyers/:id  → update a buyer
+	// PUT /buyers/:id
 	router.PUT("/buyers/:id", func(c *gin.Context) {
+		tenantID := c.GetString("currentTenant")
+		currentUser := c.GetString("currentUser")
 		idStr := c.Param("id")
 		id64, parseErr := strconv.ParseInt(idStr, 10, 64)
 		if parseErr != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid buyer ID"})
 			return
 		}
-
 		var b models.Buyer
 		if bindErr := c.BindJSON(&b); bindErr != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": bindErr.Error()})
 			return
 		}
-		b.ID = id64
-		b.LastModified = time.Now().UTC()
-
-		svcErr := buyerSvc.UpdateBuyer(context.Background(), id64, b)
+		svcErr := buyerSvc.UpdateBuyer(c.Request.Context(), tenantID, currentUser, id64, b)
 		if svcErr != nil {
 			if svcErr == repos.ErrNotFound {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Buyer not found"})
@@ -220,15 +190,17 @@ func main() {
 		c.Status(http.StatusOK)
 	})
 
-	// DELETE /buyers/:id  → soft-delete a buyer
+	// DELETE /buyers/:id
 	router.DELETE("/buyers/:id", func(c *gin.Context) {
+		tenantID := c.GetString("currentTenant")
+		currentUser := c.GetString("currentUser")
 		idStr := c.Param("id")
 		id64, parseErr := strconv.ParseInt(idStr, 10, 64)
 		if parseErr != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid buyer ID"})
 			return
 		}
-		svcErr := buyerSvc.DeleteBuyer(context.Background(), id64)
+		svcErr := buyerSvc.DeleteBuyer(c.Request.Context(), tenantID, currentUser, id64)
 		if svcErr != nil {
 			if svcErr == repos.ErrNotFound {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Buyer not found"})
@@ -254,7 +226,7 @@ func main() {
 		}
 	}()
 
-	// 6. Graceful shutdown on Ctrl+C
+	// 6. Graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt)
 	<-quit
@@ -272,18 +244,17 @@ func AuthMiddleware(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if !strings.HasPrefix(authHeader, "Bearer ") {
-			c.AbortWithStatusJSON(401, gin.H{"error": "missing bearer token"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing bearer token"})
 			return
 		}
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		claims, err := jwt.ParseToken(tokenString, secret)
 		if err != nil {
-			c.AbortWithStatusJSON(401, gin.H{"error": "invalid token"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			return
 		}
-		// claims.UserID, claims.Role
-		c.Set("currentUserID", claims.UserID)
-		c.Set("currentUserRole", claims.Role)
+		c.Set("currentUser", claims.UserID)
+		c.Set("currentTenant", claims.TenantID)
 		c.Next()
 	}
 }

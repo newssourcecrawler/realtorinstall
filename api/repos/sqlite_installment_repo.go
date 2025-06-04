@@ -1,3 +1,5 @@
+// api/repos/sqlite_installment_repo.go
+
 package repos
 
 import (
@@ -53,6 +55,7 @@ func (r *sqliteInstallmentRepo) Create(ctx context.Context, inst *models.Install
 	now := time.Now().UTC()
 	inst.CreatedAt = now
 	inst.LastModified = now
+
 	query := `
 	INSERT INTO installments (
 	  tenant_id, plan_id, sequence_number, due_date, amount_due, amount_paid, status, late_fee, paid_date,
@@ -88,6 +91,7 @@ func (r *sqliteInstallmentRepo) GetByID(ctx context.Context, tenantID string, id
 	WHERE tenant_id = ? AND id = ? AND deleted = 0;
 	`
 	row := r.db.QueryRowContext(ctx, query, tenantID, id)
+
 	var inst models.Installment
 	var deletedInt int
 	err := row.Scan(
@@ -129,6 +133,49 @@ func (r *sqliteInstallmentRepo) ListAll(ctx context.Context, tenantID string) ([
 		return nil, err
 	}
 	defer rows.Close()
+
+	var out []*models.Installment
+	for rows.Next() {
+		var inst models.Installment
+		var deletedInt int
+		if err := rows.Scan(
+			&inst.ID,
+			&inst.TenantID,
+			&inst.PlanID,
+			&inst.SequenceNumber,
+			&inst.DueDate,
+			&inst.AmountDue,
+			&inst.AmountPaid,
+			&inst.Status,
+			&inst.LateFee,
+			&inst.PaidDate,
+			&inst.CreatedBy,
+			&inst.CreatedAt,
+			&inst.ModifiedBy,
+			&inst.LastModified,
+			&deletedInt,
+		); err != nil {
+			return nil, err
+		}
+		inst.Deleted = deletedInt != 0
+		out = append(out, &inst)
+	}
+	return out, nil
+}
+
+func (r *sqliteInstallmentRepo) ListByPlan(ctx context.Context, tenantID string, planID int64) ([]*models.Installment, error) {
+	query := `
+	SELECT id, tenant_id, plan_id, sequence_number, due_date, amount_due, amount_paid, status, late_fee, paid_date,
+	       created_by, created_at, modified_by, last_modified, deleted
+	FROM installments
+	WHERE tenant_id = ? AND plan_id = ? AND deleted = 0;
+	`
+	rows, err := r.db.QueryContext(ctx, query, tenantID, planID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
 	var out []*models.Installment
 	for rows.Next() {
 		var inst models.Installment
@@ -168,6 +215,7 @@ func (r *sqliteInstallmentRepo) Update(ctx context.Context, inst *models.Install
 	}
 	now := time.Now().UTC()
 	inst.LastModified = now
+
 	query := `
 	UPDATE installments
 	SET plan_id = ?, sequence_number = ?, due_date = ?, amount_due = ?, amount_paid = ?, status = ?, late_fee = ?, paid_date = ?,

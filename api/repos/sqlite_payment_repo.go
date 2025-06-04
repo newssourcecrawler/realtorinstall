@@ -146,6 +146,44 @@ func (r *sqlitePaymentRepo) ListAll(ctx context.Context, tenantID string) ([]*mo
 	return out, nil
 }
 
+func (r *sqlitePaymentRepo) ListByInstallment(ctx context.Context, tenantID string, installmentID int64) ([]*models.Payment, error) {
+	query := `
+	SELECT id, tenant_id, installment_id, amount_paid, payment_date, payment_method, transaction_ref,
+	       created_by, created_at, modified_by, last_modified, deleted
+	FROM payments
+	WHERE tenant_id = ? installmentID = ? AND deleted = 0;
+	`
+	rows, err := r.db.QueryContext(ctx, query, tenantID, installmentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []*models.Payment
+	for rows.Next() {
+		var p models.Payment
+		var deletedInt int
+		if err := rows.Scan(
+			&p.ID,
+			&p.TenantID,
+			&p.InstallmentID,
+			&p.AmountPaid,
+			&p.PaymentDate,
+			&p.PaymentMethod,
+			&p.TransactionRef,
+			&p.CreatedBy,
+			&p.CreatedAt,
+			&p.ModifiedBy,
+			&p.LastModified,
+			&deletedInt,
+		); err != nil {
+			return nil, err
+		}
+		p.Deleted = deletedInt != 0
+		out = append(out, &p)
+	}
+	return out, nil
+}
+
 func (r *sqlitePaymentRepo) Update(ctx context.Context, p *models.Payment) error {
 	existing, err := r.GetByID(ctx, p.TenantID, p.ID)
 	if err != nil {

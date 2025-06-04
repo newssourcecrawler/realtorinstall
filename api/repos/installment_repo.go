@@ -12,6 +12,6 @@ type InstallmentRepo interface {
 	GetByID(ctx context.Context, tenantID string, id int64) (*models.Installment, error)
 	ListAll(ctx context.Context, tenantID string) ([]*models.Installment, error)
 	ListByPlan(ctx context.Context, tenantID string, planID int64) ([]*models.Installment, error)
-	Update(ctx context.Context, inst *models.Installment) error
+	Update(ctx context.Context, inst *models.Installment) error // inst.TenantID and inst.ID must be set
 	Delete(ctx context.Context, tenantID string, id int64) error
 }

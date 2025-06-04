@@ -1,3 +1,4 @@
+// services/buyer_service.go
 package services
 
 import (
@@ -8,9 +9,6 @@ import (
 	"github.com/newssourcecrawler/realtorinstall/api/repos"
 )
 
-// ErrNotFound is already defined in this package; reuse it.
-//var ErrNotFound = errors.New("not found")
-
 type BuyerService struct {
 	repo repos.BuyerRepo
 }
@@ -19,24 +17,26 @@ func NewBuyerService(r repos.BuyerRepo) *BuyerService {
 	return &BuyerService{repo: r}
 }
 
-func (s *BuyerService) CreateBuyer(ctx context.Context, b models.Buyer) (int64, error) {
+func (s *BuyerService) CreateBuyer(ctx context.Context, tenantID, currentUser string, b models.Buyer) (int64, error) {
 	if b.FirstName == "" || b.LastName == "" || b.Email == "" {
 		return 0, repos.ErrNameEmailNotFound
 	}
 	now := time.Now().UTC()
-	//b.CreatedAt = time.Now().Format(time.RFC3339)
+	b.TenantID = tenantID
 	b.CreatedAt = now
-	b.LastModified = b.CreatedAt
+	b.LastModified = now
+	b.CreatedBy = currentUser
+	b.ModifiedBy = currentUser
 	b.Deleted = false
 	return s.repo.Create(ctx, &b)
 }
 
-func (s *BuyerService) ListBuyers(ctx context.Context) ([]models.Buyer, error) {
-	bs, err := s.repo.ListAll(ctx)
+func (s *BuyerService) ListBuyers(ctx context.Context, tenantID string) ([]models.Buyer, error) {
+	bs, err := s.repo.ListAll(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
-	var out []models.Buyer
+	out := make([]models.Buyer, 0, len(bs))
 	for _, b := range bs {
 		if b.Deleted {
 			continue
@@ -46,33 +46,32 @@ func (s *BuyerService) ListBuyers(ctx context.Context) ([]models.Buyer, error) {
 	return out, nil
 }
 
-// UpdateBuyer edits an existing buyer. Returns ErrNotFound if the repo signals no match.
-func (s *BuyerService) UpdateBuyer(ctx context.Context, id int64, b models.Buyer) error {
-	// We ignore any ID in 'b' and rely on the repo.Update to use 'id' string.
-	//b.LastModified = time.Now().Format(time.RFC3339)
-	b.LastModified = time.Now().UTC()
-
-	err := s.repo.Update(ctx, id, &b)
-	if err == repos.ErrNotFound {
-		return repos.ErrNotFound
-	}
-	return err
-}
-
-// DeleteBuyer removes a buyer by ID. Returns ErrNotFound if not found.
-func (s *BuyerService) DeleteBuyer(ctx context.Context, id int64) error {
-	b, err := s.repo.GetByID(ctx, id)
-	if err == repos.ErrNotFound {
-		return repos.ErrNotFound
-	} else if err != nil {
+func (s *BuyerService) UpdateBuyer(ctx context.Context, tenantID, currentUser string, id int64, b models.Buyer) error {
+	existing, err := s.repo.GetByID(ctx, tenantID, id)
+	if err != nil {
 		return err
 	}
-	b.Deleted = true
-	b.LastModified = time.Now().UTC()
-	//b.LastModified = time.Now().Format(time.RFC3339)
-	err = s.repo.Update(ctx, id, b)
-	if err == repos.ErrNotFound {
+	if existing.Deleted {
 		return repos.ErrNotFound
 	}
-	return err
+	now := time.Now().UTC()
+	b.TenantID = tenantID
+	b.ID = id
+	b.ModifiedBy = currentUser
+	b.LastModified = now
+	return s.repo.Update(ctx, &b)
+}
+
+func (s *BuyerService) DeleteBuyer(ctx context.Context, tenantID, currentUser string, id int64) error {
+	existing, err := s.repo.GetByID(ctx, tenantID, id)
+	if err != nil {
+		return err
+	}
+	if existing.Deleted {
+		return repos.ErrNotFound
+	}
+	existing.Deleted = true
+	existing.ModifiedBy = currentUser
+	existing.LastModified = time.Now().UTC()
+	return s.repo.Update(ctx, existing)
 }

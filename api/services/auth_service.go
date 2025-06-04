@@ -1,3 +1,4 @@
+// services/auth_service.go
 package services
 
 import (
@@ -20,10 +21,9 @@ func NewAuthService(r repos.UserRepo) *AuthService {
 	return &AuthService{repo: r}
 }
 
-// Register user: hash password, create record
-func (s *AuthService) Register(ctx context.Context, u models.User, rawPassword string) (int64, error) {
-	if u.UserName == "" || u.PasswordHash == "" || u.Role == "" || u.FirstName == "" || u.LastName == "" {
-		return 0, errors.New("username, password, first and last name and role required")
+func (s *AuthService) Register(ctx context.Context, tenantID, currentUser string, u models.User, rawPassword string) (int64, error) {
+	if u.UserName == "" || u.Role == "" || u.FirstName == "" || u.LastName == "" {
+		return 0, errors.New("username, role, first and last name required")
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(rawPassword), bcrypt.DefaultCost)
 	if err != nil {
@@ -31,15 +31,17 @@ func (s *AuthService) Register(ctx context.Context, u models.User, rawPassword s
 	}
 	u.PasswordHash = string(hash)
 	now := time.Now().UTC()
+	u.TenantID = tenantID
 	u.CreatedAt = now
 	u.LastModified = now
+	u.CreatedBy = currentUser
+	u.ModifiedBy = currentUser
 	u.Deleted = false
 	return s.repo.Create(ctx, &u)
 }
 
-// Authenticate look up username, compare password
-func (s *AuthService) Authenticate(ctx context.Context, username, password string) (*models.User, error) {
-	user, err := s.repo.GetByUsername(ctx, username)
+func (s *AuthService) Authenticate(ctx context.Context, tenantID, username, password string) (*models.User, error) {
+	user, err := s.repo.GetByUsername(ctx, tenantID, username)
 	if err != nil {
 		return nil, ErrInvalidCredentials
 	}
