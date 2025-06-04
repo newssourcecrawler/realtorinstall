@@ -28,15 +28,19 @@ func NewSQLitePaymentRepo(dbPath string) (PaymentRepo, error) {
 	schema := `
 	CREATE TABLE IF NOT EXISTS payments (
 	  id INTEGER PRIMARY KEY AUTOINCREMENT,
+	  tenant_id TEXT NOT NULL,
 	  installment_id INTEGER NOT NULL,
 	  amount_paid REAL NOT NULL,
 	  payment_date DATETIME NOT NULL,
 	  payment_method TEXT NOT NULL,
 	  transaction_ref TEXT,
+	  created_by TEXT NOT NULL,
 	  created_at DATETIME NOT NULL,
+	  modified_by TEXT NOT NULL,
 	  last_modified DATETIME NOT NULL,
 	  deleted INTEGER NOT NULL DEFAULT 0
 	);
+	CREATE INDEX IF NOT EXISTS idx_payments_tenant ON payments(tenant_id);
 	`
 	if _, err := db.Exec(schema); err != nil {
 		return nil, err
@@ -65,6 +69,7 @@ func (r *sqlitePaymentRepo) Create(ctx context.Context, p *models.Payment) (int6
 	query := `
 	INSERT INTO payments (
 	  installment_id,
+	  tenant_id,
 	  amount_paid,
 	  payment_date,
 	  payment_method,
@@ -76,6 +81,7 @@ func (r *sqlitePaymentRepo) Create(ctx context.Context, p *models.Payment) (int6
 	`
 	res, err := r.db.ExecContext(ctx, query,
 		p.InstallmentID,
+		p.TenantID,
 		p.AmountPaid,
 		p.PaymentDate,
 		p.PaymentMethod,
@@ -123,7 +129,7 @@ func (r *sqlitePaymentRepo) GetByID(ctx context.Context, id int64) (*models.Paym
 // ListAll returns all non‐deleted Payments.
 func (r *sqlitePaymentRepo) ListAll(ctx context.Context) ([]*models.Payment, error) {
 	query := `
-	SELECT id, installment_id, amount_paid, payment_date, payment_method, transaction_ref, created_at, last_modified, deleted
+	SELECT id, tenant_id, installment_id, amount_paid, payment_date, payment_method, transaction_ref, created_at, last_modified, deleted
 	FROM payments
 	WHERE deleted = 0;
 	`
@@ -139,6 +145,7 @@ func (r *sqlitePaymentRepo) ListAll(ctx context.Context) ([]*models.Payment, err
 		var deletedInt int
 		if err := rows.Scan(
 			&p.ID,
+			&p.TenantID,
 			&p.InstallmentID,
 			&p.AmountPaid,
 			&p.PaymentDate,

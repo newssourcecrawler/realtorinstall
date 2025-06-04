@@ -80,23 +80,27 @@ func main() {
 		c.JSON(http.StatusOK, props)
 	})
 
-	// POST /properties
+	// Inside main.go, after setting up router and injecting services…
+
+	// Middleware should have done:
+	//    c.Set("currentUser", "jane.doe")
+	//    c.Set("currentTenant", "8a5e1f8c-40f0-4f2a-9ae5-e2c9dfd2e0f9")
+
+	// Example: Create Property
 	router.POST("/properties", func(c *gin.Context) {
-		var p models.Property
-		if bindErr := c.BindJSON(&p); bindErr != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": bindErr.Error()})
+		tenantID := c.GetString("currentTenant")
+		currentUser := c.GetString("currentUser")
+		if tenantID == "" || currentUser == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "missing tenant or user context"})
 			return
 		}
-		// Set CreatedAt / LastModified here, if not already set:
-		if p.CreatedAt.IsZero() {
-			p.CreatedAt = time.Now().UTC()
-		}
-		if p.LastModified.IsZero() {
-			p.LastModified = time.Now().UTC()
-		}
-		p.Deleted = false
 
-		id, svcErr := propSvc.CreateProperty(context.Background(), p)
+		var p models.Property
+		if err := c.BindJSON(&p); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		id, svcErr := propSvc.CreateProperty(c.Request.Context(), tenantID, currentUser, p)
 		if svcErr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": svcErr.Error()})
 			return
@@ -104,28 +108,25 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"id": id})
 	})
 
-	// PUT /properties/:id  → update an existing property
+	// Example: Update Property
 	router.PUT("/properties/:id", func(c *gin.Context) {
+		tenantID := c.GetString("currentTenant")
+		currentUser := c.GetString("currentUser")
 		idStr := c.Param("id")
 		id64, parseErr := strconv.ParseInt(idStr, 10, 64)
 		if parseErr != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid property ID"})
 			return
 		}
-
 		var p models.Property
 		if bindErr := c.BindJSON(&p); bindErr != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": bindErr.Error()})
 			return
 		}
-		// Overwrite any JSON‐sent ID so service uses path param:
-		p.ID = id64
-		p.LastModified = time.Now().UTC()
-
-		svcErr := propSvc.UpdateProperty(context.Background(), id64, p)
+		svcErr := propSvc.UpdateProperty(c.Request.Context(), tenantID, currentUser, id64, p)
 		if svcErr != nil {
-			if svcErr == repos.ErrNotFound {
-				c.JSON(http.StatusNotFound, gin.H{"error": "Property not found"})
+			if svcErr == apiServices.ErrNotFound {
+				c.JSON(http.StatusNotFound, gin.H{"error": "property not found"})
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": svcErr.Error()})

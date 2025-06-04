@@ -4,14 +4,15 @@ import "time"
 
 // Buyer represents a purchaser or customer.
 type Buyer struct {
-	ID           int64     `json:"id"`            // Primary key
-	FirstName    string    `json:"first_name"`    // Buyer’s first name
-	LastName     string    `json:"last_name"`     // Buyer’s last name
-	Email        string    `json:"email"`         // Contact email
-	Phone        string    `json:"phone"`         // Contact phone number
-	CreatedAt    time.Time `json:"created_at"`    // When this record was created
-	LastModified time.Time `json:"last_modified"` // When last updated
-	CreatedBy    string    `json:"created_by"`
-	ModifiedBy   string    `json:"modified_by"`
-	Deleted      bool      `json:"deleted"` // Soft‐delete flag
+	ID           int64     `db:"id" json:"id"`
+	TenantID     string    `db:"tenant_id" json:"tenantID"`
+	FirstName    string    `db:"first_name" json:"first_name"`
+	LastName     string    `db:"last_name" json:"last_name"`
+	Email        string    `db:"email" json:"email"`
+	Phone        string    `db:"phone" json:"phone"`
+	CreatedBy    string    `db:"created_by" json:"created_by"`
+	CreatedAt    time.Time `db:"created_at" json:"created_at"`
+	ModifiedBy   string    `db:"modified_by" json:"modified_by"`
+	LastModified time.Time `db:"last_modified" json:"last_modified"`
+	Deleted      bool      `db:"deleted" json:"deleted"`
 }

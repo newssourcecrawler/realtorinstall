@@ -26,14 +26,18 @@ func NewSQLiteLocationPricingRepo(dbPath string) (LocationPricingRepo, error) {
 	schema := `
 	CREATE TABLE IF NOT EXISTS location_pricing (
 	  id INTEGER PRIMARY KEY AUTOINCREMENT,
+	  tenant_id TEXT NOT NULL,
 	  zip_code TEXT NOT NULL,
 	  city TEXT NOT NULL,
 	  price_per_sqft REAL NOT NULL,
 	  effective_date DATETIME NOT NULL,
+	  created_by TEXT NOT NULL,
 	  created_at DATETIME NOT NULL,
+	  modified_by TEXT NOT NULL,
 	  last_modified DATETIME NOT NULL,
 	  deleted INTEGER NOT NULL DEFAULT 0
 	);
+	CREATE INDEX IF NOT EXISTS idx_location_pricing_tenant ON location_pricing(tenant_id);
 	`
 	if _, err := db.Exec(schema); err != nil {
 		return nil, err
@@ -96,6 +100,7 @@ func (r *sqliteLocationPricingRepo) GetByID(ctx context.Context, id int64) (*mod
 	var deletedInt int
 	err := row.Scan(
 		&lp.ID,
+		&lp.TenantID,
 		&lp.ZipCode,
 		&lp.City,
 		&lp.PricePerSqFt,
@@ -116,7 +121,7 @@ func (r *sqliteLocationPricingRepo) GetByID(ctx context.Context, id int64) (*mod
 // ListAll returns only non-deleted LocationPricing rows.
 func (r *sqliteLocationPricingRepo) ListAll(ctx context.Context) ([]*models.LocationPricing, error) {
 	query := `
-	SELECT id, zip_code, city, price_per_sqft, effective_date, created_at, last_modified, deleted
+	SELECT id, tenant_id, zip_code, city, price_per_sqft, effective_date, created_at, last_modified, deleted
 	FROM location_pricing
 	WHERE deleted = 0;
 	`
@@ -132,6 +137,7 @@ func (r *sqliteLocationPricingRepo) ListAll(ctx context.Context) ([]*models.Loca
 		var deletedInt int
 		if err := rows.Scan(
 			&lp.ID,
+			&lp.TenantID,
 			&lp.ZipCode,
 			&lp.City,
 			&lp.PricePerSqFt,

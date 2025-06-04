@@ -10,56 +10,62 @@ import (
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
 
-// sqliteBuyerRepo implements BuyerRepo using SQLite.
 type sqliteBuyerRepo struct {
 	db *sql.DB
 }
 
-// NewSQLiteBuyerRepo opens (or creates) the SQLite file and ensures the "buyers" table exists.
 func NewSQLiteBuyerRepo(dbPath string) (BuyerRepo, error) {
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, err
 	}
-
 	schema := `
-	CREATE TABLE IF NOT EXISTS buyers (
-	  id INTEGER PRIMARY KEY AUTOINCREMENT,
-	  first_name TEXT NOT NULL,
-	  last_name TEXT NOT NULL,
-	  email TEXT NOT NULL,
-	  phone TEXT,
-	  created_at DATETIME NOT NULL,
-	  last_modified DATETIME NOT NULL,
-	  deleted INTEGER NOT NULL DEFAULT 0
-	);
-	`
+    CREATE TABLE IF NOT EXISTS buyers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id TEXT NOT NULL,
+      first_name TEXT NOT NULL,
+      last_name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      phone TEXT,
+      created_by TEXT NOT NULL,
+      created_at DATETIME NOT NULL,
+      modified_by TEXT NOT NULL,
+      last_modified DATETIME NOT NULL,
+      deleted INTEGER NOT NULL DEFAULT 0
+    );
+    `
 	if _, err := db.Exec(schema); err != nil {
 		return nil, err
 	}
-
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_buyers_tenant ON buyers(tenant_id);`); err != nil {
+		return nil, err
+	}
 	return &sqliteBuyerRepo{db: db}, nil
 }
 
-// Create inserts a new Buyer.
 func (r *sqliteBuyerRepo) Create(ctx context.Context, b *models.Buyer) (int64, error) {
-	if b.FirstName == "" || b.LastName == "" || b.Email == "" {
-		return 0, errors.New("first name, last name and email are required")
-		//return 0, repos.NameEmailNotFound
+	if b.TenantID == "" || b.FirstName == "" || b.LastName == "" || b.Email == "" || b.CreatedBy == "" || b.ModifiedBy == "" {
+		return 0, errors.New("missing required fields or tenant_id/audit fields")
 	}
-
 	query := `
-	INSERT INTO buyers (first_name, last_name, email, phone, created_at, last_modified, deleted)
-	VALUES (?, ?, ?, ?, ?, ?, ?);
-	`
+    INSERT INTO buyers (
+      tenant_id, first_name, last_name, email, phone, created_by, created_at, modified_by, last_modified, deleted
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0);
+    `
+	now := time.Now().UTC()
+	b.CreatedAt = now
+	b.LastModified = now
+
 	res, err := r.db.ExecContext(ctx, query,
+		b.TenantID,
 		b.FirstName,
 		b.LastName,
 		b.Email,
 		b.Phone,
+		b.CreatedBy,
 		b.CreatedAt,
+		b.ModifiedBy,
 		b.LastModified,
-		boolToInt(b.Deleted),
 	)
 	if err != nil {
 		return 0, err
@@ -67,24 +73,26 @@ func (r *sqliteBuyerRepo) Create(ctx context.Context, b *models.Buyer) (int64, e
 	return res.LastInsertId()
 }
 
-// GetByID retrieves a Buyer by ID (even if soft-deleted).
-func (r *sqliteBuyerRepo) GetByID(ctx context.Context, id int64) (*models.Buyer, error) {
+func (r *sqliteBuyerRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.Buyer, error) {
 	query := `
-	SELECT id, first_name, last_name, email, phone, created_at, last_modified, deleted
-	FROM buyers
-	WHERE id = ?;
-	`
-	row := r.db.QueryRowContext(ctx, query, id)
+    SELECT id, tenant_id, first_name, last_name, email, phone, created_by, created_at, modified_by, last_modified, deleted
+    FROM buyers
+    WHERE tenant_id = ? AND id = ?;
+    `
+	row := r.db.QueryRowContext(ctx, query, tenantID, id)
 
 	var b models.Buyer
 	var deletedInt int
 	err := row.Scan(
 		&b.ID,
+		&b.TenantID,
 		&b.FirstName,
 		&b.LastName,
 		&b.Email,
 		&b.Phone,
+		&b.CreatedBy,
 		&b.CreatedAt,
+		&b.ModifiedBy,
 		&b.LastModified,
 		&deletedInt,
 	)
@@ -94,18 +102,17 @@ func (r *sqliteBuyerRepo) GetByID(ctx context.Context, id int64) (*models.Buyer,
 	if err != nil {
 		return nil, err
 	}
-	b.Deleted = intToBool(deletedInt)
+	b.Deleted = (deletedInt != 0)
 	return &b, nil
 }
 
-// ListAll returns all non-deleted Buyers.
-func (r *sqliteBuyerRepo) ListAll(ctx context.Context) ([]*models.Buyer, error) {
+func (r *sqliteBuyerRepo) ListAll(ctx context.Context, tenantID string) ([]*models.Buyer, error) {
 	query := `
-	SELECT id, first_name, last_name, email, phone, created_at, last_modified, deleted
-	FROM buyers
-	WHERE deleted = 0;
-	`
-	rows, err := r.db.QueryContext(ctx, query)
+    SELECT id, tenant_id, first_name, last_name, email, phone, created_by, created_at, modified_by, last_modified, deleted
+    FROM buyers
+    WHERE tenant_id = ? AND deleted = 0;
+    `
+	rows, err := r.db.QueryContext(ctx, query, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -117,69 +124,73 @@ func (r *sqliteBuyerRepo) ListAll(ctx context.Context) ([]*models.Buyer, error) 
 		var deletedInt int
 		if err := rows.Scan(
 			&b.ID,
+			&b.TenantID,
 			&b.FirstName,
 			&b.LastName,
 			&b.Email,
 			&b.Phone,
+			&b.CreatedBy,
 			&b.CreatedAt,
+			&b.ModifiedBy,
 			&b.LastModified,
 			&deletedInt,
 		); err != nil {
 			return nil, err
 		}
-		b.Deleted = intToBool(deletedInt)
+		b.Deleted = (deletedInt != 0)
 		out = append(out, &b)
 	}
 	return out, nil
 }
 
-// Update modifies an existing Buyer (including the Deleted flag).
-func (r *sqliteBuyerRepo) Update(ctx context.Context, id int64, b *models.Buyer) error {
-	// Check existence first (optional; service may already have done this).
-	_, err := r.GetByID(ctx, id)
+func (r *sqliteBuyerRepo) Update(ctx context.Context, b *models.Buyer) error {
+	existing, err := r.GetByID(ctx, b.TenantID, b.ID)
 	if err != nil {
 		return err
 	}
+	if existing.Deleted {
+		return ErrNotFound
+	}
+	now := time.Now().UTC()
+	b.LastModified = now
 
 	query := `
-	UPDATE buyers
-	SET first_name = ?, last_name = ?, email = ?, phone = ?, last_modified = ?, deleted = ?
-	WHERE id = ?;
-	`
+    UPDATE buyers
+    SET first_name = ?, last_name = ?, email = ?, phone = ?, modified_by = ?, last_modified = ?, deleted = ?
+    WHERE tenant_id = ? AND id = ?;
+    `
 	_, err = r.db.ExecContext(ctx, query,
 		b.FirstName,
 		b.LastName,
 		b.Email,
 		b.Phone,
+		b.ModifiedBy,
 		b.LastModified,
 		boolToInt(b.Deleted),
-		id,
+		b.TenantID,
+		b.ID,
 	)
 	return err
 }
 
-// Delete performs a soft-delete (sets deleted = 1).
-func (r *sqliteBuyerRepo) Delete(ctx context.Context, id int64) error {
-	// Confirm existence
-	_, err := r.GetByID(ctx, id)
+func (r *sqliteBuyerRepo) Delete(ctx context.Context, tenantID string, id int64) error {
+	existing, err := r.GetByID(ctx, tenantID, id)
 	if err != nil {
 		return err
 	}
+	if existing.Deleted {
+		return ErrNotFound
+	}
 	query := `
-	UPDATE buyers
-	SET deleted = 1, last_modified = ?
-	WHERE id = ?;
-	`
-	_, err = r.db.ExecContext(ctx, query, nowUTCString(), id)
+    UPDATE buyers
+    SET deleted = 1, modified_by = ?, last_modified = ?
+    WHERE tenant_id = ? AND id = ?;
+    `
+	_, err = r.db.ExecContext(ctx, query,
+		existing.ModifiedBy,
+		time.Now().UTC(),
+		tenantID,
+		id,
+	)
 	return err
-}
-
-// Helper: convert 0/1 → bool
-func intToBool(i int) bool {
-	return i != 0
-}
-
-// nowUTCString returns current UTC time formatted for SQLite.
-func nowUTCString() string {
-	return time.Now().UTC().Format("2006-01-02 15:04:05")
 }

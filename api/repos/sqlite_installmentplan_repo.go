@@ -26,6 +26,7 @@ func NewSQLitePlanRepo(dbPath string) (InstallmentPlanRepo, error) {
 	schema := `
 	CREATE TABLE IF NOT EXISTS installment_plans (
 	  id INTEGER PRIMARY KEY AUTOINCREMENT,
+	  tenant_id TEXT NOT NULL,
 	  property_id INTEGER NOT NULL,
 	  buyer_id INTEGER NOT NULL,
 	  total_price REAL NOT NULL,
@@ -34,10 +35,13 @@ func NewSQLitePlanRepo(dbPath string) (InstallmentPlanRepo, error) {
 	  frequency TEXT NOT NULL,
 	  first_installment DATETIME NOT NULL,
 	  interest_rate REAL NOT NULL,
+	  created_by TEXT NOT NULL,
 	  created_at DATETIME NOT NULL,
+	  modified_by TEXT NOT NULL,
 	  last_modified DATETIME NOT NULL,
 	  deleted INTEGER NOT NULL DEFAULT 0
 	);
+	CREATE INDEX IF NOT EXISTS idx_installment_plans_tenant ON installment_plans(tenant_id);
 	`
 	if _, err := db.Exec(schema); err != nil {
 		return nil, err
@@ -75,6 +79,7 @@ func (r *sqliteInstallmentPlanRepo) Create(ctx context.Context, p *models.Instal
 	query := `
 	INSERT INTO installment_plans (
 	  property_id,
+	  tenant_id,
 	  buyer_id,
 	  total_price,
 	  down_payment,
@@ -89,6 +94,7 @@ func (r *sqliteInstallmentPlanRepo) Create(ctx context.Context, p *models.Instal
 	`
 	res, err := r.db.ExecContext(ctx, query,
 		p.PropertyID,
+		p.TenantID,
 		p.BuyerID,
 		p.TotalPrice,
 		p.DownPayment,
@@ -108,7 +114,7 @@ func (r *sqliteInstallmentPlanRepo) Create(ctx context.Context, p *models.Instal
 // GetByID retrieves one InstallmentPlan by its primary key.
 func (r *sqliteInstallmentPlanRepo) GetByID(ctx context.Context, id int64) (*models.InstallmentPlan, error) {
 	query := `
-	SELECT id, property_id, buyer_id, total_price, down_payment, num_installments, frequency, first_installment, interest_rate, created_at, last_modified, deleted
+	SELECT id, tenant_id, property_id, buyer_id, total_price, down_payment, num_installments, frequency, first_installment, interest_rate, created_at, last_modified, deleted
 	FROM installment_plans
 	WHERE id = ?;
 	`
@@ -118,6 +124,7 @@ func (r *sqliteInstallmentPlanRepo) GetByID(ctx context.Context, id int64) (*mod
 	var deletedInt int
 	err := row.Scan(
 		&p.ID,
+		&p.TenantID,
 		&p.PropertyID,
 		&p.BuyerID,
 		&p.TotalPrice,
@@ -142,7 +149,7 @@ func (r *sqliteInstallmentPlanRepo) GetByID(ctx context.Context, id int64) (*mod
 // ListAll returns all non‐deleted InstallmentPlans.
 func (r *sqliteInstallmentPlanRepo) ListAll(ctx context.Context) ([]*models.InstallmentPlan, error) {
 	query := `
-	SELECT id, property_id, buyer_id, total_price, down_payment, num_installments, frequency, first_installment, interest_rate, created_at, last_modified, deleted
+	SELECT id, tenant_id, property_id, buyer_id, total_price, down_payment, num_installments, frequency, first_installment, interest_rate, created_at, last_modified, deleted
 	FROM installment_plans
 	WHERE deleted = 0;
 	`
@@ -158,6 +165,7 @@ func (r *sqliteInstallmentPlanRepo) ListAll(ctx context.Context) ([]*models.Inst
 		var deletedInt int
 		if err := rows.Scan(
 			&p.ID,
+			&p.TenantID,
 			&p.PropertyID,
 			&p.BuyerID,
 			&p.TotalPrice,

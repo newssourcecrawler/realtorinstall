@@ -4,63 +4,70 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/newssourcecrawler/realtorinstall/api/models"
-	//"github.com/newssourcecrawler/realtorinstall/api/repos"
 )
 
-// sqlitePropertyRepo implements PropertyRepo using SQLite.
 type sqlitePropertyRepo struct {
 	db *sql.DB
 }
 
-// NewSQLitePropertyRepo opens (or creates) the SQLite file and ensures the "properties" table exists.
+// NewSQLitePropertyRepo opens/creates the properties table (with tenant_id, etc.).
 func NewSQLitePropertyRepo(dbPath string) (PropertyRepo, error) {
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, err
 	}
-
-	// Create a "properties" table (with soft-delete support).
 	schema := `
-	CREATE TABLE IF NOT EXISTS properties (
-	  id INTEGER PRIMARY KEY AUTOINCREMENT,
-	  address TEXT NOT NULL,
-	  city TEXT NOT NULL,
-	  zip TEXT NOT NULL,
-	  listing_date DATETIME NOT NULL,
-	  created_at DATETIME NOT NULL,
-	  last_modified DATETIME NOT NULL,
-	  deleted INTEGER NOT NULL DEFAULT 0
-	);
-	`
+    CREATE TABLE IF NOT EXISTS properties (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id TEXT NOT NULL,
+      address TEXT NOT NULL,
+      city TEXT NOT NULL,
+      zip TEXT NOT NULL,
+      listing_date DATETIME NOT NULL,
+      created_by TEXT NOT NULL,
+      created_at DATETIME NOT NULL,
+      modified_by TEXT NOT NULL,
+      last_modified DATETIME NOT NULL,
+      deleted INTEGER NOT NULL DEFAULT 0
+    );
+    `
 	if _, err := db.Exec(schema); err != nil {
 		return nil, err
 	}
-
+	// Ensure index on tenant_id to speed up per‐tenant queries
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_properties_tenant ON properties(tenant_id);`); err != nil {
+		return nil, err
+	}
 	return &sqlitePropertyRepo{db: db}, nil
 }
 
-// Create inserts a new Property.
 func (r *sqlitePropertyRepo) Create(ctx context.Context, p *models.Property) (int64, error) {
-	if p.Address == "" || p.City == "" || p.ZIP == "" {
-		return 0, errors.New("address, city, and ZIP are required")
-		//return 0, repos.AddrNotFound
+	if p.TenantID == "" || p.Address == "" || p.City == "" || p.ZIP == "" || p.CreatedBy == "" || p.ModifiedBy == "" {
+		return 0, errors.New("missing required fields or tenant_id/created_by/modified_by")
 	}
-
 	query := `
-	INSERT INTO properties (address, city, zip, listing_date, created_at, last_modified, deleted)
-	VALUES (?, ?, ?, ?, ?, ?, ?);
-	`
+    INSERT INTO properties (
+      tenant_id, address, city, zip, listing_date, created_by, created_at, modified_by, last_modified, deleted
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0);
+    `
+	now := time.Now().UTC()
+	p.CreatedAt = now
+	p.LastModified = now
+
 	res, err := r.db.ExecContext(ctx, query,
+		p.TenantID,
 		p.Address,
 		p.City,
 		p.ZIP,
 		p.ListingDate,
+		p.CreatedBy,
 		p.CreatedAt,
+		p.ModifiedBy,
 		p.LastModified,
-		boolToInt(p.Deleted),
 	)
 	if err != nil {
 		return 0, err
@@ -68,24 +75,26 @@ func (r *sqlitePropertyRepo) Create(ctx context.Context, p *models.Property) (in
 	return res.LastInsertId()
 }
 
-// GetByID retrieves a Property by ID (even if soft-deleted).
-func (r *sqlitePropertyRepo) GetByID(ctx context.Context, id int64) (*models.Property, error) {
+func (r *sqlitePropertyRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.Property, error) {
 	query := `
-	SELECT id, address, city, zip, listing_date, created_at, last_modified, deleted
-	FROM properties
-	WHERE id = ?;
-	`
-	row := r.db.QueryRowContext(ctx, query, id)
+    SELECT id, tenant_id, address, city, zip, listing_date, created_by, created_at, modified_by, last_modified, deleted
+    FROM properties
+    WHERE tenant_id = ? AND id = ?;
+    `
+	row := r.db.QueryRowContext(ctx, query, tenantID, id)
 
 	var p models.Property
 	var deletedInt int
 	err := row.Scan(
 		&p.ID,
+		&p.TenantID,
 		&p.Address,
 		&p.City,
 		&p.ZIP,
 		&p.ListingDate,
+		&p.CreatedBy,
 		&p.CreatedAt,
+		&p.ModifiedBy,
 		&p.LastModified,
 		&deletedInt,
 	)
@@ -95,18 +104,17 @@ func (r *sqlitePropertyRepo) GetByID(ctx context.Context, id int64) (*models.Pro
 	if err != nil {
 		return nil, err
 	}
-	p.Deleted = intToBool(deletedInt)
+	p.Deleted = (deletedInt != 0)
 	return &p, nil
 }
 
-// ListAll returns all non-deleted Properties.
-func (r *sqlitePropertyRepo) ListAll(ctx context.Context) ([]*models.Property, error) {
+func (r *sqlitePropertyRepo) ListAll(ctx context.Context, tenantID string) ([]*models.Property, error) {
 	query := `
-	SELECT id, address, city, zip, listing_date, created_at, last_modified, deleted
-	FROM properties
-	WHERE deleted = 0;
-	`
-	rows, err := r.db.QueryContext(ctx, query)
+    SELECT id, tenant_id, address, city, zip, listing_date, created_by, created_at, modified_by, last_modified, deleted
+    FROM properties
+    WHERE tenant_id = ? AND deleted = 0;
+    `
+	rows, err := r.db.QueryContext(ctx, query, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -118,60 +126,76 @@ func (r *sqlitePropertyRepo) ListAll(ctx context.Context) ([]*models.Property, e
 		var deletedInt int
 		if err := rows.Scan(
 			&p.ID,
+			&p.TenantID,
 			&p.Address,
 			&p.City,
 			&p.ZIP,
 			&p.ListingDate,
+			&p.CreatedBy,
 			&p.CreatedAt,
+			&p.ModifiedBy,
 			&p.LastModified,
 			&deletedInt,
 		); err != nil {
 			return nil, err
 		}
-		p.Deleted = intToBool(deletedInt)
+		p.Deleted = (deletedInt != 0)
 		out = append(out, &p)
 	}
 	return out, nil
 }
 
-// Update modifies an existing Property (including its Deleted flag).
 func (r *sqlitePropertyRepo) Update(ctx context.Context, p *models.Property) error {
-	// Check existence first
-	_, err := r.GetByID(ctx, p.ID)
+	// Must confirm that p.TenantID and p.ID match an existing row
+	existing, err := r.GetByID(ctx, p.TenantID, p.ID)
 	if err != nil {
 		return err
 	}
+	if existing.Deleted {
+		return ErrNotFound
+	}
+
+	now := time.Now().UTC()
+	p.LastModified = now
 
 	query := `
-	UPDATE properties
-	SET address = ?, city = ?, zip = ?, listing_date = ?, last_modified = ?, deleted = ?
-	WHERE id = ?;
-	`
+    UPDATE properties
+    SET address = ?, city = ?, zip = ?, listing_date = ?, modified_by = ?, last_modified = ?, deleted = ?
+    WHERE tenant_id = ? AND id = ?;
+    `
 	_, err = r.db.ExecContext(ctx, query,
 		p.Address,
 		p.City,
 		p.ZIP,
 		p.ListingDate,
+		p.ModifiedBy,
 		p.LastModified,
 		boolToInt(p.Deleted),
+		p.TenantID,
 		p.ID,
 	)
 	return err
 }
 
-// Delete performs a soft-delete by setting deleted = 1.
-func (r *sqlitePropertyRepo) Delete(ctx context.Context, id int64) error {
-	// Confirm existence
-	_, err := r.GetByID(ctx, id)
+func (r *sqlitePropertyRepo) Delete(ctx context.Context, tenantID string, id int64) error {
+	// Soft‐delete by setting deleted = 1
+	existing, err := r.GetByID(ctx, tenantID, id)
 	if err != nil {
 		return err
 	}
-
+	if existing.Deleted {
+		return ErrNotFound
+	}
 	query := `
-	UPDATE properties
-	SET deleted = 1, last_modified = ?
-	WHERE id = ?;
-	`
-	_, err = r.db.ExecContext(ctx, query, nowUTCString(), id)
+    UPDATE properties
+    SET deleted = 1, modified_by = ?, last_modified = ?
+    WHERE tenant_id = ? AND id = ?;
+    `
+	_, err = r.db.ExecContext(ctx, query,
+		existing.ModifiedBy, // or pass a new “deleter” if you track delete‐by separately
+		time.Now().UTC(),
+		tenantID,
+		id,
+	)
 	return err
 }

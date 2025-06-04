@@ -4,18 +4,19 @@ import "time"
 
 // Installment represents a single payment installment in a plan.
 type Installment struct {
-	ID             int64     `json:"id"`              // Primary key
-	PlanID         int64     `json:"plan_id"`         // FK → InstallmentPlan.ID
-	SequenceNumber int       `json:"sequence_number"` // 1, 2, 3, … up to NumInstallments
-	DueDate        time.Time `json:"due_date"`        // When this installment is due
-	AmountDue      float64   `json:"amount_due"`      // Base amount due (Principal only)
-	AmountPaid     float64   `json:"amount_paid"`     // How much has been paid so far
-	Status         string    `json:"status"`          // "Pending", "Paid", "Overdue"
-	LateFee        float64   `json:"late_fee"`        // Late fee accrued (if overdue)
-	PaidDate       time.Time `json:"paid_date"`       // When this installment was fully paid
-	CreatedAt      time.Time `json:"created_at"`      // When this record was created
-	LastModified   time.Time `json:"last_modified"`   // When last updated
-	CreatedBy      string    `json:"created_by"`
-	ModifiedBy     string    `json:"modified_by"`
-	Deleted        bool      `json:"deleted"`
+	ID             int64     `db:"id" json:"id"`
+	TenantID       string    `db:"tenant_id" json:"tenantID"`
+	PlanID         int64     `db:"plan_id" json:"plan_id"`                 // FK → InstallmentPlan.ID
+	SequenceNumber int       `db:"sequence_number" json:"sequence_number"` // 1…NumInstallments
+	DueDate        time.Time `db:"due_date" json:"due_date"`
+	AmountDue      float64   `db:"amount_due" json:"amount_due"`
+	AmountPaid     float64   `db:"amount_paid" json:"amount_paid"`
+	Status         string    `db:"status" json:"status"` // "Pending", "Paid", "Overdue"
+	LateFee        float64   `db:"late_fee" json:"late_fee"`
+	PaidDate       time.Time `db:"paid_date" json:"paid_date"`
+	CreatedBy      string    `db:"created_by" json:"created_by"`
+	CreatedAt      time.Time `db:"created_at" json:"created_at"`
+	ModifiedBy     string    `db:"modified_by" json:"modified_by"`
+	LastModified   time.Time `db:"last_modified" json:"last_modified"`
+	Deleted        bool      `db:"deleted" json:"deleted"`
 }

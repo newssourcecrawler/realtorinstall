@@ -23,6 +23,7 @@ func NewSQLiteUserRepo(dbPath string) (UserRepo, error) {
 	schema := `
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+	  tenant_id TEXT NOT NULL,
       username TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
 	  first_name TEXT NOT NULL,
@@ -36,6 +37,7 @@ func NewSQLiteUserRepo(dbPath string) (UserRepo, error) {
 	  modified_by TEXT NOT NULL,
       deleted INTEGER NOT NULL DEFAULT 0
     );
+	CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);
     `
 	if _, err := db.Exec(schema); err != nil {
 		return nil, err
@@ -53,10 +55,11 @@ func (r *sqliteUserRepo) Create(ctx context.Context, u *models.User) (int64, err
 
 	query := `
     INSERT INTO users (
-      username, password_hash, role, first_name, last_name, created_at, last_modified, deleted
+      tenant_id, username, password_hash, role, first_name, last_name, created_at, last_modified, deleted
     ) VALUES (?, ?, ?, ?, ?, 0);
     `
 	res, err := r.db.ExecContext(ctx, query,
+		u.TenantID,
 		u.UserName,
 		u.PasswordHash,
 		u.Role,
@@ -73,7 +76,7 @@ func (r *sqliteUserRepo) Create(ctx context.Context, u *models.User) (int64, err
 
 func (r *sqliteUserRepo) GetByID(ctx context.Context, id int64) (*models.User, error) {
 	query := `
-    SELECT id, username, password_hash, role, first_name, last_name, created_at, last_modified, deleted
+    SELECT id, tenant_id, username, password_hash, role, first_name, last_name, created_at, last_modified, deleted
     FROM users
     WHERE id = ?;
     `
@@ -82,6 +85,7 @@ func (r *sqliteUserRepo) GetByID(ctx context.Context, id int64) (*models.User, e
 	var deletedInt int
 	err := row.Scan(
 		&u.ID,
+		&u.TenantID,
 		u.UserName,
 		u.PasswordHash,
 		u.Role,
@@ -102,7 +106,7 @@ func (r *sqliteUserRepo) GetByID(ctx context.Context, id int64) (*models.User, e
 
 func (r *sqliteUserRepo) GetByUsername(ctx context.Context, username string) (*models.User, error) {
 	query := `
-    SELECT id, username, password_hash, role, first_name, last_name, created_at, last_modified, deleted
+    SELECT id, tenant_id, username, password_hash, role, first_name, last_name, created_at, last_modified, deleted
     FROM users
     WHERE username = ? AND deleted = 0;
     `
@@ -111,6 +115,7 @@ func (r *sqliteUserRepo) GetByUsername(ctx context.Context, username string) (*m
 	var deletedInt int
 	err := row.Scan(
 		&u.ID,
+		&u.TenantID,
 		u.UserName,
 		u.PasswordHash,
 		u.Role,

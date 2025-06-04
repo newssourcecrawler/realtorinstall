@@ -4,15 +4,16 @@ import "time"
 
 // Payment represents a payment made against an installment.
 type Payment struct {
-	ID             int64     `json:"id"`              // Primary key
-	InstallmentID  int64     `json:"installment_id"`  // FK → Installment.ID
-	AmountPaid     float64   `json:"amount_paid"`     // How much was paid
-	PaymentDate    time.Time `json:"payment_date"`    // When the buyer paid
-	PaymentMethod  string    `json:"payment_method"`  // e.g., "Cash", "Check", "WireTransfer"
-	TransactionRef string    `json:"transaction_ref"` // Bank transaction ID or check number
-	CreatedAt      time.Time `json:"created_at"`      // When this record was created
-	LastModified   time.Time `json:"last_modified"`   // When last updated
-	CreatedBy      string    `json:"created_by"`
-	ModifiedBy     string    `json:"modified_by"`
-	Deleted        bool      `json:"deleted"`
+	ID             int64     `db:"id" json:"id"`
+	TenantID       string    `db:"tenant_id" json:"tenantID"`
+	InstallmentID  int64     `db:"installment_id" json:"installment_id"` // FK → Installment.ID
+	AmountPaid     float64   `db:"amount_paid" json:"amount_paid"`
+	PaymentDate    time.Time `db:"payment_date" json:"payment_date"`
+	PaymentMethod  string    `db:"payment_method" json:"payment_method"`
+	TransactionRef string    `db:"transaction_ref" json:"transaction_ref"`
+	CreatedBy      string    `db:"created_by" json:"created_by"`
+	CreatedAt      time.Time `db:"created_at" json:"created_at"`
+	ModifiedBy     string    `db:"modified_by" json:"modified_by"`
+	LastModified   time.Time `db:"last_modified" json:"last_modified"`
+	Deleted        bool      `db:"deleted" json:"deleted"`
 }

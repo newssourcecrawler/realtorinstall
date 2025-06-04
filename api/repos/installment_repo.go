@@ -8,9 +8,9 @@ import (
 
 // InstallmentRepo defines CRUD for Installment
 type InstallmentRepo interface {
-	Create(ctx context.Context, inst *models.Installment) (int64, error)
-	GetByID(ctx context.Context, id int64) (*models.Installment, error)
-	ListAll(ctx context.Context) ([]*models.Installment, error)
+	Create(ctx context.Context, inst *models.Installment) (int64, error) // inst.TenantID must be set
+	GetByID(ctx context.Context, tenantID string, id int64) (*models.Installment, error)
+	ListAll(ctx context.Context, tenantID string) ([]*models.Installment, error)
 	Update(ctx context.Context, inst *models.Installment) error
-	Delete(ctx context.Context, id int64) error
+	Delete(ctx context.Context, tenantID string, id int64) error
 }

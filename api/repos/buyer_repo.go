@@ -7,9 +7,8 @@ import (
 )
 
 type BuyerRepo interface {
-	Create(ctx context.Context, b *models.Buyer) (int64, error)
-	GetByID(ctx context.Context, id int64) (*models.Buyer, error)
-	ListAll(ctx context.Context) ([]*models.Buyer, error)
-	Update(ctx context.Context, id int64, b *models.Buyer) error
-	//Delete(ctx context.Context, id int64) error
+	GetByID(ctx context.Context, tenantID string, id int64) (*models.Buyer, error)
+	ListAll(ctx context.Context, tenantID string) ([]*models.Buyer, error)
+	Update(ctx context.Context, b *models.Buyer) error // using b.TenantID,b.ID
+	Delete(ctx context.Context, tenantID string, id int64) error
 }
