@@ -8,23 +8,17 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/newssourcecrawler/realtorinstall/api/models"
-	//"github.com/newssourcecrawler/realtorinstall/api/repos"
-	//"github.com/newssourcecrawler/realtorinstall/api/repos"
 )
 
-// sqlitePaymentRepo implements PaymentRepo using SQLite.
 type sqlitePaymentRepo struct {
 	db *sql.DB
 }
 
-// NewSQLitePaymentRepo opens/creates "payments" table.
 func NewSQLitePaymentRepo(dbPath string) (PaymentRepo, error) {
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, err
 	}
-
-	// Add a soft‐delete flag
 	schema := `
 	CREATE TABLE IF NOT EXISTS payments (
 	  id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,52 +35,37 @@ func NewSQLitePaymentRepo(dbPath string) (PaymentRepo, error) {
 	  deleted INTEGER NOT NULL DEFAULT 0
 	);
 	CREATE INDEX IF NOT EXISTS idx_payments_tenant ON payments(tenant_id);
+	CREATE INDEX IF NOT EXISTS idx_payments_installment ON payments(installment_id);
 	`
 	if _, err := db.Exec(schema); err != nil {
 		return nil, err
 	}
-
 	return &sqlitePaymentRepo{db: db}, nil
 }
 
-// Create inserts a new Payment record.
 func (r *sqlitePaymentRepo) Create(ctx context.Context, p *models.Payment) (int64, error) {
-	// Validate required fields
-	if p.InstallmentID == 0 {
-		return 0, errors.New("installment_id is required")
+	if p.TenantID == "" || p.InstallmentID == 0 || p.AmountPaid <= 0 || p.PaymentMethod == "" || p.CreatedBy == "" || p.ModifiedBy == "" {
+		return 0, errors.New("missing required fields or tenant/audit info")
 	}
-	if p.AmountPaid <= 0 {
-		return 0, errors.New("amount_paid must be positive")
-	}
-	if p.PaymentDate.IsZero() {
-		return 0, errors.New("payment_date is required")
-	}
-
 	now := time.Now().UTC()
 	p.CreatedAt = now
 	p.LastModified = now
-
 	query := `
 	INSERT INTO payments (
-	  installment_id,
-	  tenant_id,
-	  amount_paid,
-	  payment_date,
-	  payment_method,
-	  transaction_ref,
-	  created_at,
-	  last_modified,
-	  deleted
-	) VALUES (?, ?, ?, ?, ?, ?, ?, 0);
+	  tenant_id, installment_id, amount_paid, payment_date, payment_method, transaction_ref,
+	  created_by, created_at, modified_by, last_modified, deleted
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0);
 	`
 	res, err := r.db.ExecContext(ctx, query,
-		p.InstallmentID,
 		p.TenantID,
+		p.InstallmentID,
 		p.AmountPaid,
 		p.PaymentDate,
 		p.PaymentMethod,
 		p.TransactionRef,
+		p.CreatedBy,
 		p.CreatedAt,
+		p.ModifiedBy,
 		p.LastModified,
 	)
 	if err != nil {
@@ -95,25 +74,27 @@ func (r *sqlitePaymentRepo) Create(ctx context.Context, p *models.Payment) (int6
 	return res.LastInsertId()
 }
 
-// GetByID retrieves a Payment by its primary key (even if soft‐deleted).
-func (r *sqlitePaymentRepo) GetByID(ctx context.Context, id int64) (*models.Payment, error) {
+func (r *sqlitePaymentRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.Payment, error) {
 	query := `
-	SELECT id, installment_id, amount_paid, payment_date, payment_method, transaction_ref, created_at, last_modified, deleted
+	SELECT id, tenant_id, installment_id, amount_paid, payment_date, payment_method, transaction_ref,
+	       created_by, created_at, modified_by, last_modified, deleted
 	FROM payments
-	WHERE id = ?;
+	WHERE tenant_id = ? AND id = ? AND deleted = 0;
 	`
-	row := r.db.QueryRowContext(ctx, query, id)
-
+	row := r.db.QueryRowContext(ctx, query, tenantID, id)
 	var p models.Payment
 	var deletedInt int
 	err := row.Scan(
 		&p.ID,
+		&p.TenantID,
 		&p.InstallmentID,
 		&p.AmountPaid,
 		&p.PaymentDate,
 		&p.PaymentMethod,
 		&p.TransactionRef,
+		&p.CreatedBy,
 		&p.CreatedAt,
+		&p.ModifiedBy,
 		&p.LastModified,
 		&deletedInt,
 	)
@@ -123,22 +104,22 @@ func (r *sqlitePaymentRepo) GetByID(ctx context.Context, id int64) (*models.Paym
 	if err != nil {
 		return nil, err
 	}
+	p.Deleted = deletedInt != 0
 	return &p, nil
 }
 
-// ListAll returns all non‐deleted Payments.
-func (r *sqlitePaymentRepo) ListAll(ctx context.Context) ([]*models.Payment, error) {
+func (r *sqlitePaymentRepo) ListAll(ctx context.Context, tenantID string) ([]*models.Payment, error) {
 	query := `
-	SELECT id, tenant_id, installment_id, amount_paid, payment_date, payment_method, transaction_ref, created_at, last_modified, deleted
+	SELECT id, tenant_id, installment_id, amount_paid, payment_date, payment_method, transaction_ref,
+	       created_by, created_at, modified_by, last_modified, deleted
 	FROM payments
-	WHERE deleted = 0;
+	WHERE tenant_id = ? AND deleted = 0;
 	`
-	rows, err := r.db.QueryContext(ctx, query)
+	rows, err := r.db.QueryContext(ctx, query, tenantID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
 	var out []*models.Payment
 	for rows.Next() {
 		var p models.Payment
@@ -151,61 +132,69 @@ func (r *sqlitePaymentRepo) ListAll(ctx context.Context) ([]*models.Payment, err
 			&p.PaymentDate,
 			&p.PaymentMethod,
 			&p.TransactionRef,
+			&p.CreatedBy,
 			&p.CreatedAt,
+			&p.ModifiedBy,
 			&p.LastModified,
 			&deletedInt,
 		); err != nil {
 			return nil, err
 		}
+		p.Deleted = deletedInt != 0
 		out = append(out, &p)
 	}
 	return out, nil
 }
 
-// Update modifies an existing Payment (including the Deleted flag).
 func (r *sqlitePaymentRepo) Update(ctx context.Context, p *models.Payment) error {
+	existing, err := r.GetByID(ctx, p.TenantID, p.ID)
+	if err != nil {
+		return err
+	}
+	if existing.Deleted {
+		return ErrNotFound
+	}
+	now := time.Now().UTC()
+	p.LastModified = now
 	query := `
 	UPDATE payments
-	SET
-	  installment_id = ?,
-	  amount_paid = ?,
-	  payment_date = ?,
-	  payment_method = ?,
-	  transaction_ref = ?,
-	  last_modified = ?,
-	  deleted = ?
-	WHERE id = ?;
+	SET installment_id = ?, amount_paid = ?, payment_date = ?, payment_method = ?, transaction_ref = ?,
+	    modified_by = ?, last_modified = ?, deleted = ?
+	WHERE tenant_id = ? AND id = ?;
 	`
-	p.LastModified = time.Now().UTC()
-
-	_, err := r.db.ExecContext(ctx, query,
+	_, err = r.db.ExecContext(ctx, query,
 		p.InstallmentID,
 		p.AmountPaid,
 		p.PaymentDate,
 		p.PaymentMethod,
 		p.TransactionRef,
+		p.ModifiedBy,
 		p.LastModified,
 		boolToInt(p.Deleted),
+		p.TenantID,
 		p.ID,
 	)
 	return err
 }
 
-// Delete soft‐deletes a Payment by setting deleted = 1.
-func (r *sqlitePaymentRepo) Delete(ctx context.Context, id int64) error {
-	// Confirm existence
-	_, err := r.GetByID(ctx, id)
-	if err == errors.New("record are required") {
-		return errors.New("record are required")
-	} else if err != nil {
+func (r *sqlitePaymentRepo) Delete(ctx context.Context, tenantID string, id int64) error {
+	existing, err := r.GetByID(ctx, tenantID, id)
+	if err != nil {
 		return err
 	}
-
+	if existing.Deleted {
+		return ErrNotFound
+	}
 	query := `
 	UPDATE payments
-	SET deleted = 1, last_modified = ?
-	WHERE id = ?;
+	SET deleted = 1, modified_by = ?, last_modified = ?
+	WHERE tenant_id = ? AND id = ?;
 	`
-	_, err = r.db.ExecContext(ctx, query, time.Now().UTC(), id)
+	_, err = r.db.ExecContext(ctx, query,
+		existing.ModifiedBy,
+		time.Now().UTC(),
+		tenantID,
+		id,
+	)
 	return err
 }

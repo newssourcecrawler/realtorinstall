@@ -10,23 +10,19 @@ import (
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
 
-// sqliteInstallmentRepo implements InstallmentRepo using SQLite.
 type sqliteInstallmentRepo struct {
 	db *sql.DB
 }
 
-// NewSQLiteInstallmentRepo opens/creates "installments" table.
 func NewSQLiteInstallmentRepo(dbPath string) (InstallmentRepo, error) {
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, err
 	}
-
-	// Add a soft‐delete column
 	schema := `
 	CREATE TABLE IF NOT EXISTS installments (
 	  id INTEGER PRIMARY KEY AUTOINCREMENT,
-	  tenant_id INTEGER PRIMARY KEY AUTOINCREMENT,
+	  tenant_id TEXT NOT NULL,
 	  plan_id INTEGER NOT NULL,
 	  sequence_number INTEGER NOT NULL,
 	  due_date DATETIME NOT NULL,
@@ -42,61 +38,40 @@ func NewSQLiteInstallmentRepo(dbPath string) (InstallmentRepo, error) {
 	  deleted INTEGER NOT NULL DEFAULT 0
 	);
 	CREATE INDEX IF NOT EXISTS idx_installments_tenant ON installments(tenant_id);
+	CREATE INDEX IF NOT EXISTS idx_installments_plan ON installments(plan_id);
 	`
 	if _, err := db.Exec(schema); err != nil {
 		return nil, err
 	}
-
 	return &sqliteInstallmentRepo{db: db}, nil
 }
 
-// Create inserts a new Installment.
 func (r *sqliteInstallmentRepo) Create(ctx context.Context, inst *models.Installment) (int64, error) {
-	// Validate required fields
-	if inst.PlanID == 0 {
-		return 0, errors.New("plan_id is required")
+	if inst.TenantID == "" || inst.PlanID == 0 || inst.CreatedBy == "" || inst.ModifiedBy == "" {
+		return 0, errors.New("missing required fields or tenant/audit info")
 	}
-	if inst.SequenceNumber <= 0 {
-		return 0, errors.New("sequence_number must be positive")
-	}
-	if inst.DueDate.IsZero() {
-		return 0, errors.New("due_date is required")
-	}
-	if inst.Status == "" {
-		return 0, errors.New("status is required")
-	}
-
 	now := time.Now().UTC()
 	inst.CreatedAt = now
 	inst.LastModified = now
-
 	query := `
 	INSERT INTO installments (
-	  plan_id,
-	  tenant_id,
-	  sequence_number,
-	  due_date,
-	  amount_due,
-	  amount_paid,
-	  status,
-	  late_fee,
-	  paid_date,
-	  created_at,
-	  last_modified,
-	  deleted
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0);
+	  tenant_id, plan_id, sequence_number, due_date, amount_due, amount_paid, status, late_fee, paid_date,
+	  created_by, created_at, modified_by, last_modified, deleted
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0);
 	`
 	res, err := r.db.ExecContext(ctx, query,
-		inst.PlanID,
 		inst.TenantID,
+		inst.PlanID,
 		inst.SequenceNumber,
 		inst.DueDate,
 		inst.AmountDue,
 		inst.AmountPaid,
 		inst.Status,
 		inst.LateFee,
-		nullTime(inst.PaidDate),
+		inst.PaidDate,
+		inst.CreatedBy,
 		inst.CreatedAt,
+		inst.ModifiedBy,
 		inst.LastModified,
 	)
 	if err != nil {
@@ -105,17 +80,15 @@ func (r *sqliteInstallmentRepo) Create(ctx context.Context, inst *models.Install
 	return res.LastInsertId()
 }
 
-// GetByID retrieves one Installment by its primary key.
-func (r *sqliteInstallmentRepo) GetByID(ctx context.Context, id int64) (*models.Installment, error) {
+func (r *sqliteInstallmentRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.Installment, error) {
 	query := `
-	SELECT id, tenant_id, plan_id, sequence_number, due_date, amount_due, amount_paid, status, late_fee, paid_date, created_at, last_modified, deleted
+	SELECT id, tenant_id, plan_id, sequence_number, due_date, amount_due, amount_paid, status, late_fee, paid_date,
+	       created_by, created_at, modified_by, last_modified, deleted
 	FROM installments
-	WHERE id = ?;
+	WHERE tenant_id = ? AND id = ? AND deleted = 0;
 	`
-	row := r.db.QueryRowContext(ctx, query, id)
-
+	row := r.db.QueryRowContext(ctx, query, tenantID, id)
 	var inst models.Installment
-	var paidDate sql.NullTime
 	var deletedInt int
 	err := row.Scan(
 		&inst.ID,
@@ -127,8 +100,10 @@ func (r *sqliteInstallmentRepo) GetByID(ctx context.Context, id int64) (*models.
 		&inst.AmountPaid,
 		&inst.Status,
 		&inst.LateFee,
-		&paidDate,
+		&inst.PaidDate,
+		&inst.CreatedBy,
 		&inst.CreatedAt,
+		&inst.ModifiedBy,
 		&inst.LastModified,
 		&deletedInt,
 	)
@@ -138,29 +113,25 @@ func (r *sqliteInstallmentRepo) GetByID(ctx context.Context, id int64) (*models.
 	if err != nil {
 		return nil, err
 	}
-	if paidDate.Valid {
-		inst.PaidDate = paidDate.Time
-	}
+	inst.Deleted = deletedInt != 0
 	return &inst, nil
 }
 
-// ListAll returns all non‐deleted Installments.
-func (r *sqliteInstallmentRepo) ListAll(ctx context.Context) ([]*models.Installment, error) {
+func (r *sqliteInstallmentRepo) ListAll(ctx context.Context, tenantID string) ([]*models.Installment, error) {
 	query := `
-	SELECT id, tenant_id, plan_id, sequence_number, due_date, amount_due, amount_paid, status, late_fee, paid_date, created_at, last_modified, deleted
+	SELECT id, tenant_id, plan_id, sequence_number, due_date, amount_due, amount_paid, status, late_fee, paid_date,
+	       created_by, created_at, modified_by, last_modified, deleted
 	FROM installments
-	WHERE deleted = 0;
+	WHERE tenant_id = ? AND deleted = 0;
 	`
-	rows, err := r.db.QueryContext(ctx, query)
+	rows, err := r.db.QueryContext(ctx, query, tenantID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
 	var out []*models.Installment
 	for rows.Next() {
 		var inst models.Installment
-		var paidDate sql.NullTime
 		var deletedInt int
 		if err := rows.Scan(
 			&inst.ID,
@@ -172,40 +143,38 @@ func (r *sqliteInstallmentRepo) ListAll(ctx context.Context) ([]*models.Installm
 			&inst.AmountPaid,
 			&inst.Status,
 			&inst.LateFee,
-			&paidDate,
+			&inst.PaidDate,
+			&inst.CreatedBy,
 			&inst.CreatedAt,
+			&inst.ModifiedBy,
 			&inst.LastModified,
 			&deletedInt,
 		); err != nil {
 			return nil, err
 		}
-		if paidDate.Valid {
-			inst.PaidDate = paidDate.Time
-		}
+		inst.Deleted = deletedInt != 0
 		out = append(out, &inst)
 	}
 	return out, nil
 }
 
-// Update modifies an existing Installment (including the deleted flag).
 func (r *sqliteInstallmentRepo) Update(ctx context.Context, inst *models.Installment) error {
+	existing, err := r.GetByID(ctx, inst.TenantID, inst.ID)
+	if err != nil {
+		return err
+	}
+	if existing.Deleted {
+		return ErrNotFound
+	}
+	now := time.Now().UTC()
+	inst.LastModified = now
 	query := `
 	UPDATE installments
-	SET
-	  plan_id = ?,
-	  sequence_number = ?,
-	  due_date = ?,
-	  amount_due = ?,
-	  amount_paid = ?,
-	  status = ?,
-	  late_fee = ?,
-	  paid_date = ?,
-	  last_modified = ?,
-	  deleted = ?
-	WHERE id = ?;
+	SET plan_id = ?, sequence_number = ?, due_date = ?, amount_due = ?, amount_paid = ?, status = ?, late_fee = ?, paid_date = ?,
+	    modified_by = ?, last_modified = ?, deleted = ?
+	WHERE tenant_id = ? AND id = ?;
 	`
-	inst.LastModified = time.Now().UTC()
-	_, err := r.db.ExecContext(ctx, query,
+	_, err = r.db.ExecContext(ctx, query,
 		inst.PlanID,
 		inst.SequenceNumber,
 		inst.DueDate,
@@ -213,37 +182,34 @@ func (r *sqliteInstallmentRepo) Update(ctx context.Context, inst *models.Install
 		inst.AmountPaid,
 		inst.Status,
 		inst.LateFee,
-		nullTime(inst.PaidDate),
+		inst.PaidDate,
+		inst.ModifiedBy,
 		inst.LastModified,
 		boolToInt(inst.Deleted),
+		inst.TenantID,
 		inst.ID,
 	)
 	return err
 }
 
-// Delete soft‐deletes an Installment.
-func (r *sqliteInstallmentRepo) Delete(ctx context.Context, id int64) error {
-	// Confirm it exists
-	_, err := r.GetByID(ctx, id)
-	if err == ErrNotFound {
-		return ErrNotFound
-	} else if err != nil {
+func (r *sqliteInstallmentRepo) Delete(ctx context.Context, tenantID string, id int64) error {
+	existing, err := r.GetByID(ctx, tenantID, id)
+	if err != nil {
 		return err
 	}
-
+	if existing.Deleted {
+		return ErrNotFound
+	}
 	query := `
 	UPDATE installments
-	SET deleted = 1, last_modified = ?
-	WHERE id = ?;
+	SET deleted = 1, modified_by = ?, last_modified = ?
+	WHERE tenant_id = ? AND id = ?;
 	`
-	_, err = r.db.ExecContext(ctx, query, time.Now().UTC(), id)
+	_, err = r.db.ExecContext(ctx, query,
+		existing.ModifiedBy,
+		time.Now().UTC(),
+		tenantID,
+		id,
+	)
 	return err
-}
-
-// Helper: convert nil time.Time to sql.NullTime
-func nullTime(t time.Time) sql.NullTime {
-	if t.IsZero() {
-		return sql.NullTime{Valid: false}
-	}
-	return sql.NullTime{Time: t, Valid: true}
 }

@@ -1,3 +1,4 @@
+// api/repos/sqlite_installmentplan_repo.go
 package repos
 
 import (
@@ -10,19 +11,15 @@ import (
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
 
-// sqliteInstallmentPlanRepo implements InstallmentPlanRepo using SQLite.
 type sqliteInstallmentPlanRepo struct {
 	db *sql.DB
 }
 
-// NewSQLitePlanRepo opens/creates the "installment_plans" table.
-func NewSQLitePlanRepo(dbPath string) (InstallmentPlanRepo, error) {
+func NewSQLiteInstallmentPlanRepo(dbPath string) (InstallmentPlanRepo, error) {
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, err
 	}
-
-	// Add a 'deleted' column for soft‐delete
 	schema := `
 	CREATE TABLE IF NOT EXISTS installment_plans (
 	  id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,60 +38,31 @@ func NewSQLitePlanRepo(dbPath string) (InstallmentPlanRepo, error) {
 	  last_modified DATETIME NOT NULL,
 	  deleted INTEGER NOT NULL DEFAULT 0
 	);
-	CREATE INDEX IF NOT EXISTS idx_installment_plans_tenant ON installment_plans(tenant_id);
+	CREATE INDEX IF NOT EXISTS idx_installmentplans_tenant ON installment_plans(tenant_id);
+	CREATE INDEX IF NOT EXISTS idx_installmentplans_property ON installment_plans(property_id);
 	`
 	if _, err := db.Exec(schema); err != nil {
 		return nil, err
 	}
-
 	return &sqliteInstallmentPlanRepo{db: db}, nil
 }
 
-// Create inserts a new InstallmentPlan.
 func (r *sqliteInstallmentPlanRepo) Create(ctx context.Context, p *models.InstallmentPlan) (int64, error) {
-	// Validate required fields
-	if p.PropertyID == 0 {
-		return 0, errors.New("property_id is required")
+	if p.TenantID == "" || p.PropertyID == 0 || p.BuyerID == 0 || p.CreatedBy == "" || p.ModifiedBy == "" {
+		return 0, errors.New("missing required fields or tenant/audit info")
 	}
-	if p.BuyerID == 0 {
-		return 0, errors.New("buyer_id is required")
-	}
-	if p.TotalPrice <= 0 {
-		return 0, errors.New("total_price must be positive")
-	}
-	if p.NumInstallments <= 0 {
-		return 0, errors.New("num_installments must be positive")
-	}
-	if p.Frequency == "" {
-		return 0, errors.New("frequency is required")
-	}
-	if p.FirstInstallment.IsZero() {
-		return 0, errors.New("first_installment is required")
-	}
-
 	now := time.Now().UTC()
 	p.CreatedAt = now
 	p.LastModified = now
-
 	query := `
 	INSERT INTO installment_plans (
-	  property_id,
-	  tenant_id,
-	  buyer_id,
-	  total_price,
-	  down_payment,
-	  num_installments,
-	  frequency,
-	  first_installment,
-	  interest_rate,
-	  created_at,
-	  last_modified,
-	  deleted
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0);
+	  tenant_id, property_id, buyer_id, total_price, down_payment, num_installments, frequency, first_installment, interest_rate,
+	  created_by, created_at, modified_by, last_modified, deleted
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0);
 	`
 	res, err := r.db.ExecContext(ctx, query,
-		p.PropertyID,
 		p.TenantID,
+		p.PropertyID,
 		p.BuyerID,
 		p.TotalPrice,
 		p.DownPayment,
@@ -102,7 +70,9 @@ func (r *sqliteInstallmentPlanRepo) Create(ctx context.Context, p *models.Instal
 		p.Frequency,
 		p.FirstInstallment,
 		p.InterestRate,
+		p.CreatedBy,
 		p.CreatedAt,
+		p.ModifiedBy,
 		p.LastModified,
 	)
 	if err != nil {
@@ -111,15 +81,14 @@ func (r *sqliteInstallmentPlanRepo) Create(ctx context.Context, p *models.Instal
 	return res.LastInsertId()
 }
 
-// GetByID retrieves one InstallmentPlan by its primary key.
-func (r *sqliteInstallmentPlanRepo) GetByID(ctx context.Context, id int64) (*models.InstallmentPlan, error) {
+func (r *sqliteInstallmentPlanRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.InstallmentPlan, error) {
 	query := `
-	SELECT id, tenant_id, property_id, buyer_id, total_price, down_payment, num_installments, frequency, first_installment, interest_rate, created_at, last_modified, deleted
+	SELECT id, tenant_id, property_id, buyer_id, total_price, down_payment, num_installments, frequency, first_installment, interest_rate,
+	       created_by, created_at, modified_by, last_modified, deleted
 	FROM installment_plans
-	WHERE id = ?;
+	WHERE tenant_id = ? AND id = ? AND deleted = 0;
 	`
-	row := r.db.QueryRowContext(ctx, query, id)
-
+	row := r.db.QueryRowContext(ctx, query, tenantID, id)
 	var p models.InstallmentPlan
 	var deletedInt int
 	err := row.Scan(
@@ -133,7 +102,9 @@ func (r *sqliteInstallmentPlanRepo) GetByID(ctx context.Context, id int64) (*mod
 		&p.Frequency,
 		&p.FirstInstallment,
 		&p.InterestRate,
+		&p.CreatedBy,
 		&p.CreatedAt,
+		&p.ModifiedBy,
 		&p.LastModified,
 		&deletedInt,
 	)
@@ -143,22 +114,22 @@ func (r *sqliteInstallmentPlanRepo) GetByID(ctx context.Context, id int64) (*mod
 	if err != nil {
 		return nil, err
 	}
+	p.Deleted = deletedInt != 0
 	return &p, nil
 }
 
-// ListAll returns all non‐deleted InstallmentPlans.
-func (r *sqliteInstallmentPlanRepo) ListAll(ctx context.Context) ([]*models.InstallmentPlan, error) {
+func (r *sqliteInstallmentPlanRepo) ListAll(ctx context.Context, tenantID string) ([]*models.InstallmentPlan, error) {
 	query := `
-	SELECT id, tenant_id, property_id, buyer_id, total_price, down_payment, num_installments, frequency, first_installment, interest_rate, created_at, last_modified, deleted
+	SELECT id, tenant_id, property_id, buyer_id, total_price, down_payment, num_installments, frequency, first_installment, interest_rate,
+	       created_by, created_at, modified_by, last_modified, deleted
 	FROM installment_plans
-	WHERE deleted = 0;
+	WHERE tenant_id = ? AND deleted = 0;
 	`
-	rows, err := r.db.QueryContext(ctx, query)
+	rows, err := r.db.QueryContext(ctx, query, tenantID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
 	var out []*models.InstallmentPlan
 	for rows.Next() {
 		var p models.InstallmentPlan
@@ -174,36 +145,37 @@ func (r *sqliteInstallmentPlanRepo) ListAll(ctx context.Context) ([]*models.Inst
 			&p.Frequency,
 			&p.FirstInstallment,
 			&p.InterestRate,
+			&p.CreatedBy,
 			&p.CreatedAt,
+			&p.ModifiedBy,
 			&p.LastModified,
 			&deletedInt,
 		); err != nil {
 			return nil, err
 		}
+		p.Deleted = deletedInt != 0
 		out = append(out, &p)
 	}
 	return out, nil
 }
 
-// Update modifies an existing InstallmentPlan (including its deleted flag).
 func (r *sqliteInstallmentPlanRepo) Update(ctx context.Context, p *models.InstallmentPlan) error {
+	existing, err := r.GetByID(ctx, p.TenantID, p.ID)
+	if err != nil {
+		return err
+	}
+	if existing.Deleted {
+		return ErrNotFound
+	}
+	now := time.Now().UTC()
+	p.LastModified = now
 	query := `
 	UPDATE installment_plans
-	SET
-	  property_id = ?,
-	  buyer_id = ?,
-	  total_price = ?,
-	  down_payment = ?,
-	  num_installments = ?,
-	  frequency = ?,
-	  first_installment = ?,
-	  interest_rate = ?,
-	  last_modified = ?,
-	  deleted = ?
-	WHERE id = ?;
+	SET property_id = ?, buyer_id = ?, total_price = ?, down_payment = ?, num_installments = ?, frequency = ?, first_installment = ?, interest_rate = ?,
+	    modified_by = ?, last_modified = ?, deleted = ?
+	WHERE tenant_id = ? AND id = ?;
 	`
-	p.LastModified = time.Now().UTC()
-	_, err := r.db.ExecContext(ctx, query,
+	_, err = r.db.ExecContext(ctx, query,
 		p.PropertyID,
 		p.BuyerID,
 		p.TotalPrice,
@@ -212,33 +184,37 @@ func (r *sqliteInstallmentPlanRepo) Update(ctx context.Context, p *models.Instal
 		p.Frequency,
 		p.FirstInstallment,
 		p.InterestRate,
+		p.ModifiedBy,
 		p.LastModified,
 		boolToInt(p.Deleted),
+		p.TenantID,
 		p.ID,
 	)
 	return err
 }
 
-// Delete soft‐deletes an InstallmentPlan.
-func (r *sqliteInstallmentPlanRepo) Delete(ctx context.Context, id int64) error {
-	// Confirm existence
-	_, err := r.GetByID(ctx, id)
-	if err == ErrNotFound {
-		return ErrNotFound
-	} else if err != nil {
+func (r *sqliteInstallmentPlanRepo) Delete(ctx context.Context, tenantID string, id int64) error {
+	existing, err := r.GetByID(ctx, tenantID, id)
+	if err != nil {
 		return err
 	}
-
+	if existing.Deleted {
+		return ErrNotFound
+	}
 	query := `
 	UPDATE installment_plans
-	SET deleted = 1, last_modified = ?
-	WHERE id = ?;
+	SET deleted = 1, modified_by = ?, last_modified = ?
+	WHERE tenant_id = ? AND id = ?;
 	`
-	_, err = r.db.ExecContext(ctx, query, time.Now().UTC(), id)
+	_, err = r.db.ExecContext(ctx, query,
+		existing.ModifiedBy,
+		time.Now().UTC(),
+		tenantID,
+		id,
+	)
 	return err
 }
 
-// Helper: convert bool → int
 func boolToInt(b bool) int {
 	if b {
 		return 1
