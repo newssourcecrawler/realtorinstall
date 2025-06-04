@@ -257,6 +257,7 @@ func buildBuyerForm(win fyne.Window) fyne.CanvasObject {
 			return
 		}
 		loadBuyers(win)
+	})
 	refreshBuyerBtn := widget.NewButton("Refresh Buyers", func() {
 		loadBuyers(win)
 	})

@@ -10,7 +10,7 @@ import (
 )
 
 // ErrNotFound is already defined in this package; reuse it.
-var ErrNotFound = errors.New("not found")
+//var ErrNotFound = errors.New("not found")
 
 type BuyerService struct {
 	repo repos.BuyerRepo

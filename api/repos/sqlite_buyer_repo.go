@@ -3,13 +3,14 @@ package repos
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"strconv"
 
-	_ "github.com/mattn/go-sqlite3" // SQLite driver
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/newssourcecrawler/realtorinstall/internal/models"
 )
 
-// sqliteBuyerRepo is a stub implementation of BuyerRepo.
-// You can flesh out these methods later when you add Buyer logic.
+// sqliteBuyerRepo implements BuyerRepo using SQLite.
 type sqliteBuyerRepo struct {
 	db *sql.DB
 }
@@ -21,13 +22,14 @@ func NewSQLiteBuyerRepo(dbPath string) (BuyerRepo, error) {
 		return nil, err
 	}
 
-	// Create a minimal "buyers" table; adjust columns later as needed.
 	schema := `
 	CREATE TABLE IF NOT EXISTS buyers (
 	  id INTEGER PRIMARY KEY AUTOINCREMENT,
 	  name TEXT NOT NULL,
-	  email TEXT,
-	  phone TEXT
+	  email TEXT NOT NULL,
+	  created_at TEXT NOT NULL,
+	  last_modified TEXT NOT NULL,
+	  deleted INTEGER NOT NULL DEFAULT 0
 	);
 	`
 	if _, err := db.Exec(schema); err != nil {
@@ -37,24 +39,129 @@ func NewSQLiteBuyerRepo(dbPath string) (BuyerRepo, error) {
 	return &sqliteBuyerRepo{db: db}, nil
 }
 
-// The following methods satisfy the BuyerRepo interface but return "not implemented" for now.
-
+// Create inserts a new Buyer.
 func (r *sqliteBuyerRepo) Create(ctx context.Context, b *models.Buyer) (int64, error) {
-	return 0, nil // stub
+	query := `
+	INSERT INTO buyers (name, email, created_at, last_modified, deleted)
+	VALUES (?, ?, ?, ?, ?);
+	`
+	res, err := r.db.ExecContext(ctx, query,
+		b.Name,
+		b.Email,
+		b.CreatedAt,
+		b.LastModified,
+		boolToInt(b.Deleted),
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
 }
 
-func (r *sqliteBuyerRepo) GetByID(ctx context.Context, id int64) (*models.Buyer, error) {
-	return nil, nil // stub
+// GetByID retrieves a Buyer by ID (even if soft‐deleted).
+func (r *sqliteBuyerRepo) GetByID(ctx context.Context, id string) (*models.Buyer, error) {
+	intID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return nil, errors.New("invalid ID format")
+	}
+
+	query := `
+	SELECT id, name, email, created_at, last_modified, deleted
+	FROM buyers
+	WHERE id = ?;
+	`
+	row := r.db.QueryRowContext(ctx, query, intID)
+
+	var b models.Buyer
+	var deletedInt int
+	err = row.Scan(
+		&b.ID,
+		&b.Name,
+		&b.Email,
+		&b.CreatedAt,
+		&b.LastModified,
+		&deletedInt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, reposErrNotFound()
+	}
+	if err != nil {
+		return nil, err
+	}
+	b.Deleted = intToBool(deletedInt)
+	return &b, nil
 }
 
+// ListAll returns all non‐deleted Buyers.
 func (r *sqliteBuyerRepo) ListAll(ctx context.Context) ([]*models.Buyer, error) {
-	return nil, nil // stub
+	query := `
+	SELECT id, name, email, created_at, last_modified, deleted
+	FROM buyers
+	WHERE deleted = 0;
+	`
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []*models.Buyer
+	for rows.Next() {
+		var b models.Buyer
+		var deletedInt int
+		if err := rows.Scan(
+			&b.ID,
+			&b.Name,
+			&b.Email,
+			&b.CreatedAt,
+			&b.LastModified,
+			&deletedInt,
+		); err != nil {
+			return nil, err
+		}
+		b.Deleted = intToBool(deletedInt)
+		results = append(results, &b)
+	}
+	return results, nil
 }
 
-func (r *sqliteBuyerRepo) Update(ctx context.Context, b *models.Buyer) error {
-	return nil // stub
+// Update modifies an existing Buyer (including the Deleted flag).
+func (r *sqliteBuyerRepo) Update(ctx context.Context, id string, b *models.Buyer) error {
+	intID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return errors.New("invalid ID format")
+	}
+
+	query := `
+	UPDATE buyers
+	SET name = ?, email = ?, last_modified = ?, deleted = ?
+	WHERE id = ?;
+	`
+	_, err = r.db.ExecContext(
+		ctx,
+		query,
+		b.Name,
+		b.Email,
+		b.LastModified,
+		boolToInt(b.Deleted),
+		intID,
+	)
+	return err
 }
 
-func (r *sqliteBuyerRepo) Delete(ctx context.Context, id int64) error {
-	return nil // stub
+// reposErrNotFound wraps a sentinel error to signal “not found” at the repo level.
+func reposErrNotFound() error {
+	return errors.New("repo: not found")
+}
+
+// boolToInt and intToBool helpers as before
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+func intToBool(i int) bool {
+	return i != 0
 }

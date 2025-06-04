@@ -10,7 +10,7 @@ import (
 )
 
 // ErrNotFound is returned when a record does not exist.
-var ErrNotFound = errors.New("not found")
+//var ErrNotFound = errors.New("not found")
 
 type PropertyService struct {
 	repo        repos.PropertyRepo

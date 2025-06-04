@@ -3,6 +3,8 @@ package repos
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"strconv"
 
 	_ "github.com/mattn/go-sqlite3" // SQLite driver
 	"github.com/newssourcecrawler/realtorinstall/internal/models"
@@ -20,7 +22,7 @@ func NewSQLitePropertyRepo(dbPath string) (PropertyRepo, error) {
 		return nil, err
 	}
 
-	// Create a "properties" table that matches models.Property (string dates)
+	// Create a "properties" table that matches models.Property (including 'deleted' flag)
 	schema := `
 	CREATE TABLE IF NOT EXISTS properties (
 	  id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,7 +31,8 @@ func NewSQLitePropertyRepo(dbPath string) (PropertyRepo, error) {
 	  zip TEXT NOT NULL,
 	  listing_date TEXT NOT NULL,
 	  created_at TEXT NOT NULL,
-	  last_modified TEXT NOT NULL
+	  last_modified TEXT NOT NULL,
+	  deleted INTEGER NOT NULL DEFAULT 0
 	);
 	`
 	if _, err := db.Exec(schema); err != nil {
@@ -42,8 +45,8 @@ func NewSQLitePropertyRepo(dbPath string) (PropertyRepo, error) {
 // Create inserts a new Property. It expects p.ListingDate, p.CreatedAt, p.LastModified as RFC3339 strings.
 func (r *sqlitePropertyRepo) Create(ctx context.Context, p *models.Property) (int64, error) {
 	query := `
-	INSERT INTO properties (address, city, zip, listing_date, created_at, last_modified)
-	VALUES (?, ?, ?, ?, ?, ?);
+	INSERT INTO properties (address, city, zip, listing_date, created_at, last_modified, deleted)
+	VALUES (?, ?, ?, ?, ?, ?, ?);
 	`
 	res, err := r.db.ExecContext(ctx, query,
 		p.Address,
@@ -52,6 +55,7 @@ func (r *sqlitePropertyRepo) Create(ctx context.Context, p *models.Property) (in
 		p.ListingDate,
 		p.CreatedAt,
 		p.LastModified,
+		boolToInt(p.Deleted),
 	)
 	if err != nil {
 		return 0, err
@@ -59,15 +63,24 @@ func (r *sqlitePropertyRepo) Create(ctx context.Context, p *models.Property) (in
 	return res.LastInsertId()
 }
 
-// GetByID retrieves a Property by ID.
-func (r *sqlitePropertyRepo) GetByID(ctx context.Context, id int64) (*models.Property, error) {
+// GetByID retrieves a Property by ID (soft‐deleted rows are still returned so service can mark them).
+func (r *sqlitePropertyRepo) GetByID(ctx context.Context, id string) (*models.Property, error) {
+	// Parse string ID to integer
+	intID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return nil, errors.New("invalid ID format")
+	}
+
 	query := `
 	SELECT id, address, city, zip, listing_date, created_at, last_modified, deleted
-	FROM properties WHERE id = ?;
+	FROM properties
+	WHERE id = ?;
 	`
-	row := r.db.QueryRowContext(ctx, query, id)
+	row := r.db.QueryRowContext(ctx, query, intID)
+
 	var p models.Property
-	err := row.Scan(
+	var deletedInt int
+	err = row.Scan(
 		&p.ID,
 		&p.Address,
 		&p.City,
@@ -75,22 +88,24 @@ func (r *sqlitePropertyRepo) GetByID(ctx context.Context, id int64) (*models.Pro
 		&p.ListingDate,
 		&p.CreatedAt,
 		&p.LastModified,
-		&p.Deleted,
+		&deletedInt,
 	)
 	if err == sql.ErrNoRows {
-		return nil, nil
+		return nil, reposErrNotFound()
 	}
 	if err != nil {
 		return nil, err
 	}
+	p.Deleted = intToBool(deletedInt)
 	return &p, nil
 }
 
-// ListAll returns all Properties.
+// ListAll returns all non‐deleted Properties.
 func (r *sqlitePropertyRepo) ListAll(ctx context.Context) ([]*models.Property, error) {
 	query := `
 	SELECT id, address, city, zip, listing_date, created_at, last_modified, deleted 
-	FROM properties WHERE deleted = 0
+	FROM properties
+	WHERE deleted = 0;
 	`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -101,6 +116,7 @@ func (r *sqlitePropertyRepo) ListAll(ctx context.Context) ([]*models.Property, e
 	var props []*models.Property
 	for rows.Next() {
 		var p models.Property
+		var deletedInt int
 		if err := rows.Scan(
 			&p.ID,
 			&p.Address,
@@ -109,29 +125,32 @@ func (r *sqlitePropertyRepo) ListAll(ctx context.Context) ([]*models.Property, e
 			&p.ListingDate,
 			&p.CreatedAt,
 			&p.LastModified,
-			&p.Deleted); err != nil {
+			&deletedInt,
+		); err != nil {
 			return nil, err
 		}
+		p.Deleted = intToBool(deletedInt)
 		props = append(props, &p)
 	}
 	return props, nil
 }
 
-// Update modifies an existing Property.
+// Update modifies an existing Property (including its Deleted flag).
 func (r *sqlitePropertyRepo) Update(ctx context.Context, p *models.Property) error {
 	query := `
 	UPDATE properties
-	SET address=?, city=?, zip=?, listing_date=?, last_modified=?, deleted=? 
-	WHERE id = ?", 
-	p.Address, p.City, p.ZIP, p.ListingDate, p.LastModified, p.Deleted, p.ID
+	SET address = ?, city = ?, zip = ?, listing_date = ?, last_modified = ?, deleted = ?
+	WHERE id = ?;
 	`
-	_, err := r.db.ExecContext(ctx, query,
+	_, err := r.db.ExecContext(
+		ctx,
+		query,
 		p.Address,
 		p.City,
 		p.ZIP,
 		p.ListingDate,
-		p.CreatedAt,
 		p.LastModified,
+		boolToInt(p.Deleted),
 		p.ID,
 	)
 	return err
