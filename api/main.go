@@ -13,6 +13,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
+	"github.com/newssourcecrawler/realtorinstall/api/handlers"
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 	"github.com/newssourcecrawler/realtorinstall/api/repos"
 	apiRepos "github.com/newssourcecrawler/realtorinstall/api/repos"
@@ -42,6 +43,14 @@ func main() {
 	if err != nil {
 		panic(fmt.Errorf("open user repo: %w", err))
 	}
+
+	propH := handlers.NewPropertyHandler(propSvc)
+	buyerH := handlers.NewBuyerHandler(buyerSvc)
+	authH := handlers.NewAuthHandler(authSvc)
+	planH := handlers.NewPlanHandler(planSvc)
+	instH := handlers.NewInstallmentHandler(instSvc)
+	payH := handlers.NewPaymentHandler(paySvc)
+	priceH := handlers.NewPricingHandler(pricingSvc)
 
 	// 3. Construct services
 	authSvc := apiServices.NewAuthService(userRepo)
