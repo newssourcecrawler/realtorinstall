@@ -8,7 +8,6 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/newssourcecrawler/realtorinstall/api/models"
-	"github.com/newssourcecrawler/realtorinstall/api/repos"
 )
 
 // sqliteLocationPricingRepo implements LocationPricingRepo using SQLite.
@@ -16,14 +15,14 @@ type sqliteLocationPricingRepo struct {
 	db *sql.DB
 }
 
-// NewSQLiteLocationPricingRepo opens/creates "location_pricing" table.
+// NewSQLiteLocationPricingRepo opens/creates the "location_pricing" table.
 func NewSQLiteLocationPricingRepo(dbPath string) (LocationPricingRepo, error) {
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, err
 	}
 
-	// We add a 'deleted' column for soft‐deletes
+	// We add a 'deleted' column for soft-deletes
 	schema := `
 	CREATE TABLE IF NOT EXISTS location_pricing (
 	  id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,6 +44,20 @@ func NewSQLiteLocationPricingRepo(dbPath string) (LocationPricingRepo, error) {
 
 // Create inserts a new LocationPricing record.
 func (r *sqliteLocationPricingRepo) Create(ctx context.Context, lp *models.LocationPricing) (int64, error) {
+	if lp.ZipCode == "" || lp.City == "" {
+		return 0, errors.New("zip_code and city are required")
+	}
+	if lp.PricePerSqFt <= 0 {
+		return 0, errors.New("price_per_sqft must be positive")
+	}
+	if lp.EffectiveDate.IsZero() {
+		return 0, errors.New("effective_date is required")
+	}
+
+	now := time.Now().UTC()
+	lp.CreatedAt = now
+	lp.LastModified = now
+
 	query := `
 	INSERT INTO location_pricing (
 	  zip_code,
@@ -56,14 +69,6 @@ func (r *sqliteLocationPricingRepo) Create(ctx context.Context, lp *models.Locat
 	  deleted
 	) VALUES (?, ?, ?, ?, ?, ?, 0);
 	`
-	// Ensure CreatedAt/LastModified are set
-	if lp.EffectiveDate.IsZero() {
-		return 0, errors.New("effective_date is required")
-	}
-	now := time.Now().UTC()
-	lp.CreatedAt = now
-	lp.LastModified = now
-
 	res, err := r.db.ExecContext(ctx, query,
 		lp.ZipCode,
 		lp.City,
@@ -78,7 +83,7 @@ func (r *sqliteLocationPricingRepo) Create(ctx context.Context, lp *models.Locat
 	return res.LastInsertId()
 }
 
-// GetByID retrieves one LocationPricing, even if soft‐deleted.
+// GetByID retrieves one LocationPricing (even if soft-deleted).
 func (r *sqliteLocationPricingRepo) GetByID(ctx context.Context, id int64) (*models.LocationPricing, error) {
 	query := `
 	SELECT id, zip_code, city, price_per_sqft, effective_date, created_at, last_modified, deleted
@@ -105,12 +110,10 @@ func (r *sqliteLocationPricingRepo) GetByID(ctx context.Context, id int64) (*mod
 	if err != nil {
 		return nil, err
 	}
-
-	// We store deleted but services can decide whether to ignore it
 	return &lp, nil
 }
 
-// ListAll returns only non‐deleted LocationPricing rows.
+// ListAll returns only non-deleted LocationPricing rows.
 func (r *sqliteLocationPricingRepo) ListAll(ctx context.Context) ([]*models.LocationPricing, error) {
 	query := `
 	SELECT id, zip_code, city, price_per_sqft, effective_date, created_at, last_modified, deleted
@@ -146,6 +149,15 @@ func (r *sqliteLocationPricingRepo) ListAll(ctx context.Context) ([]*models.Loca
 
 // Update modifies an existing LocationPricing (including its deleted flag).
 func (r *sqliteLocationPricingRepo) Update(ctx context.Context, lp *models.LocationPricing) error {
+	// Check existence first
+	_, err := r.GetByID(ctx, lp.ID)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now().UTC()
+	lp.LastModified = now
+
 	query := `
 	UPDATE location_pricing
 	SET
@@ -157,10 +169,7 @@ func (r *sqliteLocationPricingRepo) Update(ctx context.Context, lp *models.Locat
 	  deleted = ?
 	WHERE id = ?;
 	`
-	now := time.Now().UTC()
-	lp.LastModified = now
-
-	_, err := r.db.ExecContext(ctx, query,
+	_, err = r.db.ExecContext(ctx, query,
 		lp.ZipCode,
 		lp.City,
 		lp.PricePerSqFt,
@@ -169,19 +178,14 @@ func (r *sqliteLocationPricingRepo) Update(ctx context.Context, lp *models.Locat
 		boolToInt(lp.Deleted),
 		lp.ID,
 	)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
-// Delete performs a soft‐delete by setting deleted = 1.
+// Delete performs a soft-delete by setting deleted = 1.
 func (r *sqliteLocationPricingRepo) Delete(ctx context.Context, id int64) error {
-	// First, check that the row exists
+	// Confirm existence
 	_, err := r.GetByID(ctx, id)
-	if err == repos.ErrNotFound {
-		return repos.ErrNotFound
-	} else if err != nil {
+	if err != nil {
 		return err
 	}
 
@@ -190,6 +194,6 @@ func (r *sqliteLocationPricingRepo) Delete(ctx context.Context, id int64) error 
 	SET deleted = 1, last_modified = ?
 	WHERE id = ?;
 	`
-	_, err = r.db.ExecContext(ctx, query, time.Now().UTC(), id)
+	_, err = r.db.ExecContext(ctx, query, nowUTCString(), id)
 	return err
 }

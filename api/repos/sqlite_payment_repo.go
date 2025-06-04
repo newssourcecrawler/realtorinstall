@@ -8,7 +8,8 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/newssourcecrawler/realtorinstall/api/models"
-	"github.com/newssourcecrawler/realtorinstall/api/repos"
+	//"github.com/newssourcecrawler/realtorinstall/api/repos"
+	//"github.com/newssourcecrawler/realtorinstall/api/repos"
 )
 
 // sqlitePaymentRepo implements PaymentRepo using SQLite.
@@ -187,8 +188,8 @@ func (r *sqlitePaymentRepo) Update(ctx context.Context, p *models.Payment) error
 func (r *sqlitePaymentRepo) Delete(ctx context.Context, id int64) error {
 	// Confirm existence
 	_, err := r.GetByID(ctx, id)
-	if err == repos.ErrNotFound {
-		return repos.ErrNotFound
+	if err == errors.New("record are required") {
+		return errors.New("record are required")
 	} else if err != nil {
 		return err
 	}

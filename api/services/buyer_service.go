@@ -21,7 +21,7 @@ func NewBuyerService(r repos.BuyerRepo) *BuyerService {
 
 func (s *BuyerService) CreateBuyer(ctx context.Context, b models.Buyer) (int64, error) {
 	if b.FirstName == "" || b.LastName == "" || b.Email == "" {
-		return 0, repos.NameEmailNotFound
+		return 0, repos.ErrNameEmailNotFound
 	}
 	now := time.Now().UTC()
 	//b.CreatedAt = time.Now().Format(time.RFC3339)

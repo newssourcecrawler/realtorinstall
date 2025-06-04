@@ -24,7 +24,7 @@ func NewPropertyService(r repos.PropertyRepo, pr repos.LocationPricingRepo) *Pro
 // CreateProperty creates a new property, setting listing & timestamp fields if empty.
 func (s *PropertyService) CreateProperty(ctx context.Context, p models.Property) (int64, error) {
 	if p.Address == "" || p.City == "" {
-		return 0, repos.AddrNotFound
+		return 0, repos.ErrAddrNotFound
 	}
 
 	// If ListingDate is empty, set it to now (RFC3339 string)
@@ -58,7 +58,7 @@ func (s *PropertyService) ListProperties(ctx context.Context) ([]models.Property
 func (s *PropertyService) UpdateProperty(ctx context.Context, id int64, p models.Property) error {
 	// Convert id (string) to int64 inside the repo layer; assume the repo.Update returns ErrNotFound when not found.
 	if p.ID == 0 {
-		return repos.IDNotFound
+		return repos.ErrIDNotFound
 	}
 	// Refresh LastModified
 	//p.LastModified = time.Now().Format(time.RFC3339)

@@ -3,10 +3,11 @@ package repos
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/newssourcecrawler/realtorinstall/api/models"
-	"github.com/newssourcecrawler/realtorinstall/api/repos"
+	//"github.com/newssourcecrawler/realtorinstall/api/repos"
 )
 
 // sqlitePropertyRepo implements PropertyRepo using SQLite.
@@ -44,8 +45,8 @@ func NewSQLitePropertyRepo(dbPath string) (PropertyRepo, error) {
 // Create inserts a new Property.
 func (r *sqlitePropertyRepo) Create(ctx context.Context, p *models.Property) (int64, error) {
 	if p.Address == "" || p.City == "" || p.ZIP == "" {
-		//return 0, errors.New("address, city, and ZIP are required")
-		return 0, repos.AddrNotFound
+		return 0, errors.New("address, city, and ZIP are required")
+		//return 0, repos.AddrNotFound
 	}
 
 	query := `
