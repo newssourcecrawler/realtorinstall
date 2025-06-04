@@ -9,8 +9,8 @@ import (
 	"github.com/newssourcecrawler/realtorinstall/internal/repos"
 )
 
-// ErrNotFound is already defined in this package; reuse it.
-//var ErrNotFound = errors.New("not found")
+// ErrNotFound is returned when a record does not exist.
+var ErrNotFound = errors.New("not found")
 
 type BuyerService struct {
 	repo repos.BuyerRepo
@@ -25,13 +25,13 @@ func (s *BuyerService) CreateBuyer(ctx context.Context, b models.Buyer) (int64, 
 		return 0, errors.New("name and email are required")
 	}
 	b.Deleted = false
-	b.CreatedAt = time.Now().Format(time.RFC3339)
-	b.LastModified = b.CreatedAt
+	now := time.Now().Format(time.RFC3339)
+	b.CreatedAt = now
+	b.LastModified = now
 	return s.repo.Create(ctx, &b)
 }
 
 func (s *BuyerService) ListBuyers(ctx context.Context) ([]models.Buyer, error) {
-	// Ensure ListAll only returns non‐deleted. If not, filter here similarly.
 	bs, err := s.repo.ListAll(ctx)
 	if err != nil {
 		return nil, err
@@ -48,7 +48,6 @@ func (s *BuyerService) ListBuyers(ctx context.Context) ([]models.Buyer, error) {
 
 // UpdateBuyer edits an existing buyer. Returns ErrNotFound if the repo signals no match.
 func (s *BuyerService) UpdateBuyer(ctx context.Context, id string, b models.Buyer) error {
-	// We ignore any ID in 'b' and rely on the repo.Update to use 'id' string.
 	b.LastModified = time.Now().Format(time.RFC3339)
 	err := s.repo.Update(ctx, id, &b)
 	if err == repos.ErrNotFound {
@@ -67,7 +66,7 @@ func (s *BuyerService) DeleteBuyer(ctx context.Context, id string) error {
 	}
 	b.Deleted = true
 	b.LastModified = time.Now().Format(time.RFC3339)
-	err := s.repo.Update(ctx, id, b)
+	err = s.repo.Update(ctx, id, b)
 	if err == repos.ErrNotFound {
 		return ErrNotFound
 	}

@@ -10,9 +10,9 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 
-	"github.com/newssourcecrawler/realtorinstall/internal/repos"
-	"github.com/newssourcecrawler/realtorinstall/internal/services"
-	"github.com/newssourcecrawler/realtorinstall/internal/utils"
+	"github.com/newssourcecrawler/realtorinstall/api/repos"
+	"github.com/newssourcecrawler/realtorinstall/api/services"
+	"github.com/newssourcecrawler/realtorinstall/api/utils"
 )
 
 func main() {

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/newssourcecrawler/realtorinstall/internal/models"
-	"github.com/newssourcecrawler/realtorinstall/internal/repos"
+	"github.com/newssourcecrawler/realtorinstall/api/models"
+	"github.com/newssourcecrawler/realtorinstall/api/repos"
 )
 
 // ErrNotFound is returned when a record does not exist.
@@ -27,16 +27,13 @@ func (s *PropertyService) CreateProperty(ctx context.Context, p models.Property)
 	if p.Address == "" || p.City == "" {
 		return 0, errors.New("address and city cannot be empty")
 	}
-
-	// If ListingDate is empty, set it to now (RFC3339 string)
 	if p.ListingDate == "" {
 		p.ListingDate = time.Now().Format(time.RFC3339)
 	}
-	// Set created/modified timestamps to now
 	now := time.Now().Format(time.RFC3339)
 	p.CreatedAt = now
 	p.LastModified = now
-
+	p.Deleted = false
 	return s.repo.Create(ctx, &p)
 }
 
@@ -48,7 +45,6 @@ func (s *PropertyService) ListProperties(ctx context.Context) ([]models.Property
 	}
 	var out []models.Property
 	for _, p := range props {
-		// If the repo’s ListAll didn’t filter, skip deleted:
 		if p.Deleted {
 			continue
 		}
@@ -59,14 +55,8 @@ func (s *PropertyService) ListProperties(ctx context.Context) ([]models.Property
 
 // UpdateProperty edits an existing property. Returns ErrNotFound if not found.
 func (s *PropertyService) UpdateProperty(ctx context.Context, id string, p models.Property) error {
-	// Convert id (string) to int64 inside the repo layer; assume the repo.Update returns ErrNotFound when not found.
-	if p.ID == 0 {
-		return errors.New("invalid property ID")
-	}
-	// Refresh LastModified
 	p.LastModified = time.Now().Format(time.RFC3339)
-
-	// We expect repo.Update to update only non‐deleted rows.
+	// We expect repo.Update to return repos.ErrNotFound if no row exists.
 	err := s.repo.Update(ctx, &p)
 	if err == repos.ErrNotFound {
 		return ErrNotFound
@@ -76,17 +66,14 @@ func (s *PropertyService) UpdateProperty(ctx context.Context, id string, p model
 
 // DeleteProperty performs a soft‐delete (marks 'Deleted=true') instead of hard‐deletion.
 func (s *PropertyService) DeleteProperty(ctx context.Context, id string) error {
-	// Retrieve existing record
 	prop, err := s.repo.GetByID(ctx, id)
 	if err == repos.ErrNotFound {
 		return ErrNotFound
 	} else if err != nil {
 		return err
 	}
-	// Mark as deleted
 	prop.Deleted = true
 	prop.LastModified = time.Now().Format(time.RFC3339)
-	// Save update
 	err = s.repo.Update(ctx, prop)
 	if err == repos.ErrNotFound {
 		return ErrNotFound

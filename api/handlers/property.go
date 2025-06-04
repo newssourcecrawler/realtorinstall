@@ -6,8 +6,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	intModels "github.com/newssourcecrawler/realtorinstall/api/models"
 	"github.com/newssourcecrawler/realtorinstall/api/services"
-	intModels "github.com/newssourcecrawler/realtorinstall/internal/models"
 )
 
 type PropertyHandler struct {
