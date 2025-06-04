@@ -153,3 +153,22 @@ func (r *sqlitePropertyRepo) Update(ctx context.Context, p *models.Property) err
 	)
 	return err
 }
+
+func (r *sqlitePropertyRepo) Delete(ctx context.Context, id string) error {
+	intID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return ErrNotFound
+	}
+	result, err := r.db.ExecContext(ctx,
+		`UPDATE properties
+         SET deleted = 1, last_modified = CURRENT_TIMESTAMP
+         WHERE id = ?;`, intID)
+	if err != nil {
+		return err // some DB error
+	}
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}

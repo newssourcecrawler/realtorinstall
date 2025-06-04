@@ -12,7 +12,7 @@ import (
 
 	"github.com/newssourcecrawler/realtorinstall/api/repos"
 	"github.com/newssourcecrawler/realtorinstall/api/services"
-	"github.com/newssourcecrawler/realtorinstall/api/utils"
+	"github.com/newssourcecrawler/realtorinstall/internal/utils"
 )
 
 func main() {

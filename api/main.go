@@ -11,10 +11,9 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
+	"github.com/newssourcecrawler/realtorinstall/api/models"
 	apiRepos "github.com/newssourcecrawler/realtorinstall/api/repos"
 	apiServices "github.com/newssourcecrawler/realtorinstall/api/services"
-	"github.com/newssourcecrawler/realtorinstall/internal/models"
-	intRepos "github.com/newssourcecrawler/realtorinstall/internal/repos"
 )
 
 func main() {

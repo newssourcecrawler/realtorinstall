@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/newssourcecrawler/realtorinstall/internal/models"
-	"github.com/newssourcecrawler/realtorinstall/internal/repos"
+	"github.com/newssourcecrawler/realtorinstall/api/models"
+	"github.com/newssourcecrawler/realtorinstall/api/repos"
 )
 
 // ErrNotFound is returned when a record does not exist.
@@ -57,7 +57,7 @@ func (s *PropertyService) ListProperties(ctx context.Context) ([]models.Property
 func (s *PropertyService) UpdateProperty(ctx context.Context, id string, p models.Property) error {
 	// Convert id (string) to int64 inside the repo layer; assume the repo.Update returns ErrNotFound when not found.
 	if p.ID == 0 {
-		return errors.New("invalid property ID")
+		return IDNotFound
 	}
 	// Refresh LastModified
 	p.LastModified = time.Now().Format(time.RFC3339)

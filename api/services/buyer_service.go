@@ -2,15 +2,14 @@ package services
 
 import (
 	"context"
-	"errors"
 	"time"
 
-	"github.com/newssourcecrawler/realtorinstall/internal/models"
-	"github.com/newssourcecrawler/realtorinstall/internal/repos"
+	"github.com/newssourcecrawler/realtorinstall/api/models"
+	"github.com/newssourcecrawler/realtorinstall/api/repos"
 )
 
 // ErrNotFound is already defined in this package; reuse it.
-var ErrNotFound = errors.New("not found")
+//var ErrNotFound = errors.New("not found")
 
 type BuyerService struct {
 	repo repos.BuyerRepo
@@ -22,7 +21,7 @@ func NewBuyerService(r repos.BuyerRepo) *BuyerService {
 
 func (s *BuyerService) CreateBuyer(ctx context.Context, b models.Buyer) (int64, error) {
 	if b.Name == "" || b.Email == "" {
-		return 0, errors.New("name and email are required")
+		return 0, NameEmailNotFound
 	}
 	b.CreatedAt = time.Now().Format(time.RFC3339)
 	b.LastModified = b.CreatedAt
