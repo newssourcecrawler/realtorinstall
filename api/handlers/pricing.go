@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/newssourcecrawler/realtorinstall/api/models"
+	"github.com/newssourcecrawler/realtorinstall/api/repos"
 	"github.com/newssourcecrawler/realtorinstall/api/services"
 )
 
@@ -59,7 +60,7 @@ func (h *PricingHandler) Update(c *gin.Context) {
 	tenantID := c.GetString("currentTenant")
 	currentUser := c.GetString("currentUser")
 	if err := h.svc.UpdateLocationPricing(context.Background(), tenantID, currentUser, id64, lp); err != nil {
-		if err == services.ErrNotFound {
+		if err == repos.ErrNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "pricing not found"})
 			return
 		}
@@ -79,7 +80,7 @@ func (h *PricingHandler) Delete(c *gin.Context) {
 	tenantID := c.GetString("currentTenant")
 	currentUser := c.GetString("currentUser")
 	if err := h.svc.DeleteLocationPricing(context.Background(), tenantID, currentUser, id64); err != nil {
-		if err == services.ErrNotFound {
+		if err == repos.ErrNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "pricing not found"})
 			return
 		}

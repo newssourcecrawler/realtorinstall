@@ -26,23 +26,14 @@ func main() {
 		panic(fmt.Errorf("mkdir data: %w", err))
 	}
 
-	// 2. Initialize repositories
-	propRepo, err := apiRepos.NewSQLitePropertyRepo("data/properties.db")
-	if err != nil {
-		panic(fmt.Errorf("open property repo: %w", err))
-	}
-	pricingRepo, err := apiRepos.NewSQLiteLocationPricingRepo("data/pricing.db")
-	if err != nil {
-		panic(fmt.Errorf("open pricing repo: %w", err))
-	}
-	buyerRepo, err := apiRepos.NewSQLiteBuyerRepo("data/buyers.db")
-	if err != nil {
-		panic(fmt.Errorf("open buyer repo: %w", err))
-	}
-	userRepo, err := apiRepos.NewSQLiteUserRepo("data/users.db")
-	if err != nil {
-		panic(fmt.Errorf("open user repo: %w", err))
-	}
+	// Initialize repositories
+	propRepo, _ := apiRepos.NewSQLitePropertyRepo("data/properties.db")
+	pricingRepo, _ := apiRepos.NewSQLiteLocationPricingRepo("data/pricing.db")
+	buyerRepo, _ := apiRepos.NewSQLiteBuyerRepo("data/buyers.db")
+	userRepo, _ := apiRepos.NewSQLiteUserRepo("data/users.db")
+	planRepo, _ := apiRepos.NewSQLiteInstallmentPlanRepo("data/plans.db")
+	instRepo, _ := apiRepos.NewSQLiteInstallmentRepo("data/installments.db")
+	payRepo, _ := apiRepos.NewSQLitePaymentRepo("data/payments.db")
 
 	propH := handlers.NewPropertyHandler(propSvc)
 	buyerH := handlers.NewBuyerHandler(buyerSvc)
@@ -52,15 +43,32 @@ func main() {
 	payH := handlers.NewPaymentHandler(paySvc)
 	priceH := handlers.NewPricingHandler(pricingSvc)
 
-	// 3. Construct services
+	// Construct services
 	authSvc := apiServices.NewAuthService(userRepo)
 	propSvc := apiServices.NewPropertyService(propRepo, pricingRepo, userRepo)
 	buyerSvc := apiServices.NewBuyerService(buyerRepo, userRepo)
+	pricingSvc := apiServices.NewPricingService(pricingRepo)
+	planSvc := apiServices.NewPlanService(planRepo, instRepo)
+	instSvc := apiServices.NewInstallmentService(instRepo, payRepo)
+	paySvc := apiServices.NewPaymentService(payRepo, instSvc)
 
 	// 4. Build Gin router with CORS and authentication middleware
 	router := gin.Default()
 	router.Use(cors.Default())
 	router.Use(AuthMiddleware("YOUR_JWT_SECRET"))
+
+	// Instantiate handlers
+	authH := handlers.NewAuthHandler(authSvc)
+	propH := handlers.NewPropertyHandler(propSvc)
+	buyerH := handlers.NewBuyerHandler(buyerSvc)
+	priceH := handlers.NewPricingHandler(pricingSvc)
+	planH := handlers.NewPlanHandler(planSvc)
+	instH := handlers.NewInstallmentHandler(instSvc)
+	payH := handlers.NewPaymentHandler(paySvc)
+
+	// Authentication routes
+	router.POST("/login", authH.Login)
+	router.POST("/register", authH.Register)
 
 	// PROPERTY ROUTES
 
@@ -220,6 +228,31 @@ func main() {
 		}
 		c.Status(http.StatusOK)
 	})
+
+	// Pricing routes
+	router.GET("/pricing", priceH.List)
+	router.POST("/pricing", priceH.Create)
+	router.PUT("/pricing/:id", priceH.Update)
+	router.DELETE("/pricing/:id", priceH.Delete)
+
+	// Plan routes
+	router.GET("/plans", planH.List)
+	router.POST("/plans", planH.Create)
+	router.PUT("/plans/:id", planH.Update)
+	router.DELETE("/plans/:id", planH.Delete)
+
+	// Installment routes
+	router.GET("/installments", instH.List)
+	router.GET("/installments/plan/:planId", instH.ListByPlan)
+	router.POST("/installments", instH.Create)
+	router.PUT("/installments/:id", instH.Update)
+	router.DELETE("/installments/:id", instH.Delete)
+
+	// Payment routes
+	router.GET("/payments", payH.List)
+	router.POST("/payments", payH.Create)
+	router.PUT("/payments/:id", payH.Update)
+	router.DELETE("/payments/:id", payH.Delete)
 
 	// 5. Start HTTP server with graceful shutdown
 	srv := &http.Server{
