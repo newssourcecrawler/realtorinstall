@@ -80,10 +80,11 @@ func main() {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		// Service will ignore any p.ID and rely on idParam
+		// Ensure the ID field in the body matches the path param (optional):
+		//p.ID = 0 // ignore any ID in JSON; let service use idParam
 		err := propSvc.UpdateProperty(context.Background(), idParam, p)
 		if err != nil {
-			if err == apiServices.ErrNotFound {
+			if err == apiRepos.ErrNotFound {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Property not found"})
 				return
 			}
@@ -98,7 +99,7 @@ func main() {
 		idParam := c.Param("id")
 		err := propSvc.DeleteProperty(context.Background(), idParam)
 		if err != nil {
-			if err == apiServices.ErrNotFound {
+			if err == apiRepos.ErrNotFound {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Property not found"})
 				return
 			}
@@ -146,7 +147,7 @@ func main() {
 		b.ID = 0 // ignore any ID from JSON; service will use idParam
 		err := buyerSvc.UpdateBuyer(context.Background(), idParam, b)
 		if err != nil {
-			if err == apiServices.ErrNotFound {
+			if err == apiRepos.ErrNotFound {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Buyer not found"})
 				return
 			}
@@ -161,7 +162,7 @@ func main() {
 		idParam := c.Param("id")
 		err := buyerSvc.DeleteBuyer(context.Background(), idParam)
 		if err != nil {
-			if err == apiServices.ErrNotFound {
+			if err == apiRepos.ErrNotFound {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Buyer not found"})
 				return
 			}
