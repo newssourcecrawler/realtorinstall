@@ -3,11 +3,10 @@ package repos
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"strconv"
 
 	_ "github.com/mattn/go-sqlite3" // SQLite driver
-	"github.com/newssourcecrawler/realtorinstall/internal/models"
+	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
 
 // sqlitePropertyRepo implements PropertyRepo using SQLite.
@@ -29,9 +28,9 @@ func NewSQLitePropertyRepo(dbPath string) (PropertyRepo, error) {
 	  address TEXT NOT NULL,
 	  city TEXT NOT NULL,
 	  zip TEXT NOT NULL,
-	  listing_date TEXT NOT NULL,
-	  created_at TEXT NOT NULL,
-	  last_modified TEXT NOT NULL,
+	  listing_date DATETIME NOT NULL,
+	  created_at DATETIME NOT NULL,
+	  last_modified DATETIME NOT NULL,
 	  deleted INTEGER NOT NULL DEFAULT 0
 	);
 	`
@@ -42,7 +41,7 @@ func NewSQLitePropertyRepo(dbPath string) (PropertyRepo, error) {
 	return &sqlitePropertyRepo{db: db}, nil
 }
 
-// Create inserts a new Property. It expects p.ListingDate, p.CreatedAt, p.LastModified as RFC3339 strings.
+// Create inserts a new Property.
 func (r *sqlitePropertyRepo) Create(ctx context.Context, p *models.Property) (int64, error) {
 	query := `
 	INSERT INTO properties (address, city, zip, listing_date, created_at, last_modified, deleted)
@@ -65,10 +64,9 @@ func (r *sqlitePropertyRepo) Create(ctx context.Context, p *models.Property) (in
 
 // GetByID retrieves a Property by ID (soft‐deleted rows are still returned so service can mark them).
 func (r *sqlitePropertyRepo) GetByID(ctx context.Context, id string) (*models.Property, error) {
-	// Parse string ID to integer
 	intID, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
-		return nil, errors.New("invalid ID format")
+		return nil, ErrNotFound
 	}
 
 	query := `
@@ -91,7 +89,7 @@ func (r *sqlitePropertyRepo) GetByID(ctx context.Context, id string) (*models.Pr
 		&deletedInt,
 	)
 	if err == sql.ErrNoRows {
-		return nil, reposErrNotFound()
+		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -155,10 +153,3 @@ func (r *sqlitePropertyRepo) Update(ctx context.Context, p *models.Property) err
 	)
 	return err
 }
-
-// Delete removes a Property by ID.
-//func (r *sqlitePropertyRepo) Delete(ctx context.Context, id int64) error {
-//	query := `DELETE FROM properties WHERE id = ?;`
-//	_, err := r.db.ExecContext(ctx, query, id)
-//	return err
-//}

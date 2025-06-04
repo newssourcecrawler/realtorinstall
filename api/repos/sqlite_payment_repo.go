@@ -5,7 +5,7 @@ import (
 	"database/sql"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/newssourcecrawler/realtorinstall/internal/models"
+	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
 
 type sqlitePaymentRepo struct{ db *sql.DB }

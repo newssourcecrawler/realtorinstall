@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/newssourcecrawler/realtorinstall/internal/models"
-	"github.com/newssourcecrawler/realtorinstall/internal/repos"
+	"github.com/newssourcecrawler/realtorinstall/api/models"
+	"github.com/newssourcecrawler/realtorinstall/api/repos"
 )
 
 type PaymentService struct {

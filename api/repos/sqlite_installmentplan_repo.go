@@ -5,7 +5,7 @@ import (
 	"database/sql"
 
 	_ "github.com/mattn/go-sqlite3" // ensure SQLite driver is imported
-	"github.com/newssourcecrawler/realtorinstall/internal/models"
+	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
 
 // InstallmentPlanRepo is already defined in internal/repos/installmentplan_repo.go

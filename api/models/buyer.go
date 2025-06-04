@@ -11,4 +11,5 @@ type Buyer struct {
 	Phone        string    `json:"phone"`         // Contact phone number
 	CreatedAt    time.Time `json:"created_at"`    // When this record was created
 	LastModified time.Time `json:"last_modified"` // When last updated
+	Deleted      bool      `json:"deleted"`       // Soft‐delete flag
 }

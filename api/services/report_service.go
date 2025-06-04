@@ -3,7 +3,7 @@ package services
 import (
 	"context"
 
-	"github.com/newssourcecrawler/realtorinstall/internal/repos"
+	"github.com/newssourcecrawler/realtorinstall/api/repos"
 )
 
 type ReportService struct {

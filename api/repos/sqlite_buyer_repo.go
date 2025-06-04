@@ -3,11 +3,10 @@ package repos
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"strconv"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/newssourcecrawler/realtorinstall/internal/models"
+	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
 
 // sqliteBuyerRepo implements BuyerRepo using SQLite.
@@ -25,10 +24,12 @@ func NewSQLiteBuyerRepo(dbPath string) (BuyerRepo, error) {
 	schema := `
 	CREATE TABLE IF NOT EXISTS buyers (
 	  id INTEGER PRIMARY KEY AUTOINCREMENT,
-	  name TEXT NOT NULL,
+	  first_name TEXT NOT NULL,
+	  last_name TEXT NOT NULL,
 	  email TEXT NOT NULL,
-	  created_at TEXT NOT NULL,
-	  last_modified TEXT NOT NULL,
+	  phone TEXT,
+	  created_at DATETIME NOT NULL,
+	  last_modified DATETIME NOT NULL,
 	  deleted INTEGER NOT NULL DEFAULT 0
 	);
 	`
@@ -42,12 +43,14 @@ func NewSQLiteBuyerRepo(dbPath string) (BuyerRepo, error) {
 // Create inserts a new Buyer.
 func (r *sqliteBuyerRepo) Create(ctx context.Context, b *models.Buyer) (int64, error) {
 	query := `
-	INSERT INTO buyers (name, email, created_at, last_modified, deleted)
-	VALUES (?, ?, ?, ?, ?);
+	INSERT INTO buyers (first_name, last_name, email, phone, created_at, last_modified, deleted)
+	VALUES (?, ?, ?, ?, ?, ?, ?);
 	`
 	res, err := r.db.ExecContext(ctx, query,
-		b.Name,
+		b.FirstName,
+		b.LastName,
 		b.Email,
+		b.Phone,
 		b.CreatedAt,
 		b.LastModified,
 		boolToInt(b.Deleted),
@@ -62,11 +65,11 @@ func (r *sqliteBuyerRepo) Create(ctx context.Context, b *models.Buyer) (int64, e
 func (r *sqliteBuyerRepo) GetByID(ctx context.Context, id string) (*models.Buyer, error) {
 	intID, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
-		return nil, errors.New("invalid ID format")
+		return nil, ErrNotFound
 	}
 
 	query := `
-	SELECT id, name, email, created_at, last_modified, deleted
+	SELECT id, first_name, last_name, email, phone, created_at, last_modified, deleted
 	FROM buyers
 	WHERE id = ?;
 	`
@@ -76,14 +79,16 @@ func (r *sqliteBuyerRepo) GetByID(ctx context.Context, id string) (*models.Buyer
 	var deletedInt int
 	err = row.Scan(
 		&b.ID,
-		&b.Name,
+		&b.FirstName,
+		&b.LastName,
 		&b.Email,
+		&b.Phone,
 		&b.CreatedAt,
 		&b.LastModified,
 		&deletedInt,
 	)
 	if err == sql.ErrNoRows {
-		return nil, reposErrNotFound()
+		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -95,7 +100,7 @@ func (r *sqliteBuyerRepo) GetByID(ctx context.Context, id string) (*models.Buyer
 // ListAll returns all non‐deleted Buyers.
 func (r *sqliteBuyerRepo) ListAll(ctx context.Context) ([]*models.Buyer, error) {
 	query := `
-	SELECT id, name, email, created_at, last_modified, deleted
+	SELECT id, first_name, last_name, email, phone, created_at, last_modified, deleted
 	FROM buyers
 	WHERE deleted = 0;
 	`
@@ -111,8 +116,10 @@ func (r *sqliteBuyerRepo) ListAll(ctx context.Context) ([]*models.Buyer, error) 
 		var deletedInt int
 		if err := rows.Scan(
 			&b.ID,
-			&b.Name,
+			&b.FirstName,
+			&b.LastName,
 			&b.Email,
+			&b.Phone,
 			&b.CreatedAt,
 			&b.LastModified,
 			&deletedInt,
@@ -129,19 +136,21 @@ func (r *sqliteBuyerRepo) ListAll(ctx context.Context) ([]*models.Buyer, error) 
 func (r *sqliteBuyerRepo) Update(ctx context.Context, id string, b *models.Buyer) error {
 	intID, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
-		return errors.New("invalid ID format")
+		return ErrNotFound
 	}
 
 	query := `
 	UPDATE buyers
-	SET name = ?, email = ?, last_modified = ?, deleted = ?
+	SET first_name = ?, last_name = ?, email = ?, phone = ?, last_modified = ?, deleted = ?
 	WHERE id = ?;
 	`
 	_, err = r.db.ExecContext(
 		ctx,
 		query,
-		b.Name,
+		b.FirstName,
+		b.LastName,
 		b.Email,
+		b.Phone,
 		b.LastModified,
 		boolToInt(b.Deleted),
 		intID,
@@ -149,12 +158,7 @@ func (r *sqliteBuyerRepo) Update(ctx context.Context, id string, b *models.Buyer
 	return err
 }
 
-// reposErrNotFound wraps a sentinel error to signal “not found” at the repo level.
-func reposErrNotFound() error {
-	return errors.New("repo: not found")
-}
-
-// boolToInt and intToBool helpers as before
+// boolToInt converts a bool → 0/1 for SQLite.
 func boolToInt(b bool) int {
 	if b {
 		return 1
@@ -162,6 +166,7 @@ func boolToInt(b bool) int {
 	return 0
 }
 
+// intToBool converts 0/1 → bool.
 func intToBool(i int) bool {
 	return i != 0
 }

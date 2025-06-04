@@ -3,7 +3,7 @@ package repos
 import (
 	"context"
 
-	"github.com/newssourcecrawler/realtorinstall/internal/models"
+	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
 
 type BuyerRepo interface {
