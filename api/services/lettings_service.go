@@ -1,4 +1,3 @@
-// services/Lettings_service.go
 package services
 
 import (
@@ -11,41 +10,56 @@ import (
 )
 
 type LettingsService struct {
-	repo        repos.InstallmentLettingsRepo
-	installRepo repos.InstallmentRepo
+	repo repos.LettingsRepo
 }
 
-func NewLettingsService(r repos.InstallmentLettingsRepo, ir repos.InstallmentRepo) *LettingsService {
-	return &LettingsService{repo: r, installRepo: ir}
+func NewLettingsService(r repos.LettingsRepo) *LettingsService {
+	return &LettingsService{repo: r}
 }
 
-func (s *LettingsService) CreateLettings(ctx context.Context, tenantID, currentUser string, p models.InstallmentLettings) (int64, error) {
-	if p.PropertyID == 0 || p.BuyerID == 0 {
-		return 0, errors.New("property and buyer must be specified")
+func (s *LettingsService) CreateLetting(
+	ctx context.Context,
+	tenantID string,
+	currentUser string,
+	l models.Lettings,
+) (int64, error) {
+	// Required fields
+	if l.PropertyID == 0 || l.TenantUserID == 0 || l.RentAmount <= 0 {
+		return 0, errors.New("property, tenant user, and rent amount must be specified")
 	}
 	now := time.Now().UTC()
-	p.TenantID = tenantID
-	p.CreatedAt = now
-	p.LastModified = now
-	p.CreatedBy = currentUser
-	p.ModifiedBy = currentUser
-	p.Deleted = false
-	return s.repo.Create(ctx, &p)
+	l.TenantID = tenantID
+	l.CreatedAt = now
+	l.LastModified = now
+	l.CreatedBy = currentUser
+	l.ModifiedBy = currentUser
+	l.Deleted = false
+
+	return s.repo.Create(ctx, &l)
 }
 
-func (s *LettingsService) ListLettingss(ctx context.Context, tenantID string) ([]models.InstallmentLettings, error) {
-	ps, err := s.repo.ListAll(ctx, tenantID)
+func (s *LettingsService) ListLettings(
+	ctx context.Context,
+	tenantID string,
+) ([]models.Lettings, error) {
+	rows, err := s.repo.ListAll(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]models.InstallmentLettings, 0, len(ps))
-	for _, p := range ps {
-		out = append(out, *p)
+	out := make([]models.Lettings, 0, len(rows))
+	for _, rec := range rows {
+		out = append(out, *rec)
 	}
 	return out, nil
 }
 
-func (s *LettingsService) UpdateLettings(ctx context.Context, tenantID, currentUser string, id int64, p models.InstallmentLettings) error {
+func (s *LettingsService) UpdateLetting(
+	ctx context.Context,
+	tenantID string,
+	currentUser string,
+	id int64,
+	l models.Lettings,
+) error {
 	existing, err := s.repo.GetByID(ctx, tenantID, id)
 	if err != nil {
 		return err
@@ -54,14 +68,23 @@ func (s *LettingsService) UpdateLettings(ctx context.Context, tenantID, currentU
 		return repos.ErrNotFound
 	}
 	now := time.Now().UTC()
-	p.TenantID = tenantID
-	p.ID = id
-	p.ModifiedBy = currentUser
-	p.LastModified = now
-	return s.repo.Update(ctx, &p)
+	l.ID = id
+	l.TenantID = tenantID
+	l.CreatedAt = existing.CreatedAt
+	l.CreatedBy = existing.CreatedBy
+	l.Deleted = existing.Deleted
+	l.ModifiedBy = currentUser
+	l.LastModified = now
+
+	return s.repo.Update(ctx, &l)
 }
 
-func (s *LettingsService) DeleteLettings(ctx context.Context, tenantID, currentUser string, id int64) error {
+func (s *LettingsService) DeleteLetting(
+	ctx context.Context,
+	tenantID string,
+	currentUser string,
+	id int64,
+) error {
 	existing, err := s.repo.GetByID(ctx, tenantID, id)
 	if err != nil {
 		return err
@@ -72,5 +95,6 @@ func (s *LettingsService) DeleteLettings(ctx context.Context, tenantID, currentU
 	existing.Deleted = true
 	existing.ModifiedBy = currentUser
 	existing.LastModified = time.Now().UTC()
+
 	return s.repo.Update(ctx, existing)
 }

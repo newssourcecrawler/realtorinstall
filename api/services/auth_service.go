@@ -1,4 +1,3 @@
-// services/auth_service.go
 package services
 
 import (
@@ -21,9 +20,16 @@ func NewAuthService(r repos.UserRepo) *AuthService {
 	return &AuthService{repo: r}
 }
 
-func (s *AuthService) Register(ctx context.Context, tenantID, currentUser string, u models.User, rawPassword string) (int64, error) {
+func (s *AuthService) Register(
+	ctx context.Context,
+	tenantID string,
+	currentUser string,
+	u models.User,
+	rawPassword string,
+) (int64, error) {
+	// Required fields
 	if u.UserName == "" || u.Role == "" || u.FirstName == "" || u.LastName == "" {
-		return 0, errors.New("username, role, first and last name required")
+		return 0, errors.New("username, role, first name, and last name are required")
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(rawPassword), bcrypt.DefaultCost)
 	if err != nil {
@@ -37,10 +43,16 @@ func (s *AuthService) Register(ctx context.Context, tenantID, currentUser string
 	u.CreatedBy = currentUser
 	u.ModifiedBy = currentUser
 	u.Deleted = false
+
 	return s.repo.Create(ctx, &u)
 }
 
-func (s *AuthService) Authenticate(ctx context.Context, tenantID, username, password string) (*models.User, error) {
+func (s *AuthService) Authenticate(
+	ctx context.Context,
+	tenantID string,
+	username string,
+	password string,
+) (*models.User, error) {
 	user, err := s.repo.GetByUsername(ctx, tenantID, username)
 	if err != nil {
 		return nil, ErrInvalidCredentials

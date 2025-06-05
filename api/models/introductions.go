@@ -9,6 +9,7 @@ type Introductions struct {
 	IntroducedParty string    `db:"introduced_party" json:"introducedparty"`
 	PropertyID      int64     `db:"property_id" json:"propertyID"`
 	TransactionID   int64     `db:"transaction_id" json:"transactionID"`
+	TransactionType string    `db:"transaction_type" json:"transactiontype"`
 	IntroDate       time.Time `db:"intro_date" json:"introdate"`
 	AgreedFee       float64   `db:"agreed_fee" json:"agreedfee"`
 	FeeType         string    `db:"fee_type" json:"feetype"`

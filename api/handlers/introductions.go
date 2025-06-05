@@ -11,19 +11,19 @@ import (
 	"github.com/newssourcecrawler/realtorinstall/api/services"
 )
 
-type CommissionHandler struct {
-	svc *services.CommissionService
+type IntroductionsHandler struct {
+	svc *services.IntroductionsService
 }
 
-func NewCommissionHandler(svc *services.CommissionService) *CommissionHandler {
-	return &CommissionHandler{svc: svc}
+func NewIntroductionsHandler(svc *services.IntroductionsService) *IntroductionsHandler {
+	return &IntroductionsHandler{svc: svc}
 }
 
-func (h *CommissionHandler) List(c *gin.Context) {
+func (h *IntroductionsHandler) List(c *gin.Context) {
 	tenantID := c.GetString("currentTenant")
 	filterType := c.GetString("currentType")
 	beneficiaryID := c.GetString("currentBeneficiaryID")
-	list, err := h.svc.ListCommissions(context.Background(), tenantID, filterType, beneficiaryID)
+	list, err := h.svc.ListIntroductionss(context.Background(), tenantID, filterType, beneficiaryID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -31,15 +31,15 @@ func (h *CommissionHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, list)
 }
 
-func (h *CommissionHandler) Create(c *gin.Context) {
-	var b models.Commission
+func (h *IntroductionsHandler) Create(c *gin.Context) {
+	var b models.Introductions
 	if err := c.BindJSON(&b); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	tenantID := c.GetString("currentTenant")
 	currentUser := c.GetString("currentUser")
-	id, err := h.svc.CreateCommission(context.Background(), tenantID, currentUser, b)
+	id, err := h.svc.CreateIntroductions(context.Background(), tenantID, currentUser, b)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -47,23 +47,23 @@ func (h *CommissionHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"id": id})
 }
 
-func (h *CommissionHandler) Update(c *gin.Context) {
+func (h *IntroductionsHandler) Update(c *gin.Context) {
 	idStr := c.Param("id")
 	id64, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid Commission ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid Introductions ID"})
 		return
 	}
-	var b models.Commission
+	var b models.Introductions
 	if err := c.BindJSON(&b); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	tenantID := c.GetString("currentTenant")
 	currentUser := c.GetString("currentUser")
-	if err := h.svc.UpdateCommission(context.Background(), tenantID, currentUser, id64, b); err != nil {
+	if err := h.svc.UpdateIntroductions(context.Background(), tenantID, currentUser, id64, b); err != nil {
 		if err == repos.ErrNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Commission not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Introductions not found"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -72,18 +72,18 @@ func (h *CommissionHandler) Update(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
-func (h *CommissionHandler) Delete(c *gin.Context) {
+func (h *IntroductionsHandler) Delete(c *gin.Context) {
 	idStr := c.Param("id")
 	id64, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid Commission ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid Introductions ID"})
 		return
 	}
 	tenantID := c.GetString("currentTenant")
 	currentUser := c.GetString("currentUser")
-	if err := h.svc.DeleteCommission(context.Background(), tenantID, currentUser, id64); err != nil {
+	if err := h.svc.DeleteIntroductions(context.Background(), tenantID, currentUser, id64); err != nil {
 		if err == repos.ErrNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Commission not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Introductions not found"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

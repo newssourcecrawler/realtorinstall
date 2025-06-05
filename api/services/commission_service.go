@@ -3,19 +3,17 @@ package services
 import (
 	"context"
 	"errors"
-	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 	"github.com/newssourcecrawler/realtorinstall/api/repos"
 )
 
 type CommissionService struct {
 	repo        repos.CommissionRepo
-	saleRepo    repos.SalesRepo         // or repos.InstallmentPlanRepo if you treat sales as installments
-	lettingRepo repos.LettingsRepo      // if you have a separate letting table
-	introRepo   repos.IntroductionsRepo // if you have an introduction table
+	saleRepo    repos.SalesRepo
+	lettingRepo repos.LettingsRepo
+	introRepo   repos.IntroductionsRepo
 	userRepo    repos.UserRepo
 }
 
@@ -41,11 +39,15 @@ func (s *CommissionService) CreateCommission(
 	currentUser string,
 	comm models.Commission,
 ) (int64, error) {
-	// Must have required fields
-	if comm.TransactionType == "" || comm.TransactionID == 0 || comm.BeneficiaryID == 0 || comm.CommissionType == "" {
+	// Required fields
+	if comm.TransactionType == "" ||
+		comm.TransactionID == 0 ||
+		comm.BeneficiaryID == 0 ||
+		comm.CommissionType == "" {
 		return 0, errors.New("missing required commission fields")
 	}
-	// Validate transaction exists (optional)
+
+	// Validate referenced transaction
 	switch comm.TransactionType {
 	case "sale":
 		if _, err := s.saleRepo.GetByID(ctx, tenantID, comm.TransactionID); err != nil {
@@ -62,12 +64,13 @@ func (s *CommissionService) CreateCommission(
 	default:
 		return 0, errors.New("invalid transaction type")
 	}
-	// Validate beneficiary exists
+
+	// Validate beneficiary
 	if _, err := s.userRepo.GetByID(ctx, tenantID, comm.BeneficiaryID); err != nil {
-		return 0, errors.New("beneficiary user not found")
+		return 0, errors.New("beneficiary not found")
 	}
 
-	// Calculate “calculated_amount” if percentage
+	// Compute calculated_amount if percentage
 	if comm.CommissionType == "percentage" {
 		var txnValue float64
 		switch comm.TransactionType {
@@ -83,7 +86,6 @@ func (s *CommissionService) CreateCommission(
 		}
 		comm.CalculatedAmount = txnValue * comm.RateOrAmount
 	} else {
-		// For “fixed” or “credit”, assume RateOrAmount already holds the exact number
 		comm.CalculatedAmount = comm.RateOrAmount
 	}
 
@@ -101,8 +103,8 @@ func (s *CommissionService) CreateCommission(
 func (s *CommissionService) ListCommissions(
 	ctx context.Context,
 	tenantID string,
-	filterType string, // optional; “sale” | “letting” | “introduction” | “” for all
-	beneficiaryID int64, // optional; 0 = no filter
+	filterType string, // “sale”|“letting”|“introduction” or “” for all
+	beneficiaryID int64, // 0 for no filter
 ) ([]models.Commission, error) {
 	rows, err := s.repo.ListAll(ctx, tenantID)
 	if err != nil {
@@ -124,18 +126,13 @@ func (s *CommissionService) ListCommissions(
 	return out, nil
 }
 
-// GET /reports/commissions/by‐beneficiary
-func (h *ReportHandler) CommissionsByBeneficiary(c *gin.Context) {
-	tenantID := c.GetString("currentTenant")
-	data, err := h.svc.GetCommissionsByBeneficiary(c.Request.Context(), tenantID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, data)
-}
-
-func (s *BuyerService) UpdateCommission(ctx context.Context, tenantID, currentUser string, id int64, c models.Commission) error {
+func (s *CommissionService) UpdateCommission(
+	ctx context.Context,
+	tenantID string,
+	currentUser string,
+	id int64,
+	comm models.Commission,
+) error {
 	existing, err := s.repo.GetByID(ctx, tenantID, id)
 	if err != nil {
 		return err
@@ -143,12 +140,38 @@ func (s *BuyerService) UpdateCommission(ctx context.Context, tenantID, currentUs
 	if existing.Deleted {
 		return repos.ErrNotFound
 	}
+
+	// Preserve fields that shouldn’t change
+	comm.ID = id
+	comm.TenantID = tenantID
+	comm.CreatedAt = existing.CreatedAt
+	comm.CreatedBy = existing.CreatedBy
+	comm.Deleted = existing.Deleted
+
+	// Recompute calculated_amount if percentage
+	if comm.CommissionType == "percentage" {
+		var txnValue float64
+		switch comm.TransactionType {
+		case "sale":
+			sale, _ := s.saleRepo.GetByID(ctx, tenantID, comm.TransactionID)
+			txnValue = sale.SalePrice
+		case "letting":
+			let, _ := s.lettingRepo.GetByID(ctx, tenantID, comm.TransactionID)
+			txnValue = let.RentAmount
+		case "introduction":
+			intro, _ := s.introRepo.GetByID(ctx, tenantID, comm.TransactionID)
+			txnValue = intro.AgreedFee
+		}
+		comm.CalculatedAmount = txnValue * comm.RateOrAmount
+	} else {
+		comm.CalculatedAmount = comm.RateOrAmount
+	}
+
 	now := time.Now().UTC()
-	c.TenantID = tenantID
-	c.ID = id
-	c.ModifiedBy = currentUser
-	c.LastModified = now
-	return s.repo.Update(ctx, &c)
+	comm.ModifiedBy = currentUser
+	comm.LastModified = now
+
+	return s.repo.Update(ctx, &comm)
 }
 
 func (s *CommissionService) DeleteCommission(
@@ -164,6 +187,7 @@ func (s *CommissionService) DeleteCommission(
 	if existing.Deleted {
 		return repos.ErrNotFound
 	}
+
 	existing.Deleted = true
 	existing.ModifiedBy = currentUser
 	existing.LastModified = time.Now().UTC()

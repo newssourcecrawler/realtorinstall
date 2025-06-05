@@ -27,6 +27,7 @@ func NewSQLiteIntroductionsRepo(dbPath string) (IntroductionsRepo, error) {
 	  introduced_party  TEXT    NOT NULL,
 	  property_id       INTEGER NOT NULL,
 	  transaction_id    INTEGER,
+	  transaction_type	TEXT NOT NULL,
 	  intro_date        DATETIME NOT NULL,
 	  agreed_fee        REAL    NOT NULL,
 	  fee_type          TEXT    NOT NULL,

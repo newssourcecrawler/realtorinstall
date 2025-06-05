@@ -1,4 +1,3 @@
-// services/Sales_service.go
 package services
 
 import (
@@ -11,41 +10,56 @@ import (
 )
 
 type SalesService struct {
-	repo        repos.InstallmentSalesRepo
-	installRepo repos.InstallmentRepo
+	repo repos.SalesRepo
 }
 
-func NewSalesService(r repos.InstallmentSalesRepo, ir repos.InstallmentRepo) *SalesService {
-	return &SalesService{repo: r, installRepo: ir}
+func NewSalesService(r repos.SalesRepo) *SalesService {
+	return &SalesService{repo: r}
 }
 
-func (s *SalesService) CreateSales(ctx context.Context, tenantID, currentUser string, p models.InstallmentSales) (int64, error) {
-	if p.PropertyID == 0 || p.BuyerID == 0 {
-		return 0, errors.New("property and buyer must be specified")
+func (s *SalesService) CreateSale(
+	ctx context.Context,
+	tenantID string,
+	currentUser string,
+	sale models.Sales,
+) (int64, error) {
+	// Required fields
+	if sale.PropertyID == 0 || sale.BuyerID == 0 || sale.SalePrice <= 0 || sale.SaleType == "" {
+		return 0, errors.New("property, buyer, sale price, and sale type must be specified")
 	}
 	now := time.Now().UTC()
-	p.TenantID = tenantID
-	p.CreatedAt = now
-	p.LastModified = now
-	p.CreatedBy = currentUser
-	p.ModifiedBy = currentUser
-	p.Deleted = false
-	return s.repo.Create(ctx, &p)
+	sale.TenantID = tenantID
+	sale.CreatedAt = now
+	sale.LastModified = now
+	sale.CreatedBy = currentUser
+	sale.ModifiedBy = currentUser
+	sale.Deleted = false
+
+	return s.repo.Create(ctx, &sale)
 }
 
-func (s *SalesService) ListSaless(ctx context.Context, tenantID string) ([]models.InstallmentSales, error) {
-	ps, err := s.repo.ListAll(ctx, tenantID)
+func (s *SalesService) ListSales(
+	ctx context.Context,
+	tenantID string,
+) ([]models.Sales, error) {
+	rows, err := s.repo.ListAll(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]models.InstallmentSales, 0, len(ps))
-	for _, p := range ps {
-		out = append(out, *p)
+	out := make([]models.Sales, 0, len(rows))
+	for _, rec := range rows {
+		out = append(out, *rec)
 	}
 	return out, nil
 }
 
-func (s *SalesService) UpdateSales(ctx context.Context, tenantID, currentUser string, id int64, p models.InstallmentSales) error {
+func (s *SalesService) UpdateSale(
+	ctx context.Context,
+	tenantID string,
+	currentUser string,
+	id int64,
+	sale models.Sales,
+) error {
 	existing, err := s.repo.GetByID(ctx, tenantID, id)
 	if err != nil {
 		return err
@@ -53,15 +67,27 @@ func (s *SalesService) UpdateSales(ctx context.Context, tenantID, currentUser st
 	if existing.Deleted {
 		return repos.ErrNotFound
 	}
+
+	// Preserve unchangeable fields
+	sale.ID = id
+	sale.TenantID = tenantID
+	sale.CreatedAt = existing.CreatedAt
+	sale.CreatedBy = existing.CreatedBy
+	sale.Deleted = existing.Deleted
+
 	now := time.Now().UTC()
-	p.TenantID = tenantID
-	p.ID = id
-	p.ModifiedBy = currentUser
-	p.LastModified = now
-	return s.repo.Update(ctx, &p)
+	sale.ModifiedBy = currentUser
+	sale.LastModified = now
+
+	return s.repo.Update(ctx, &sale)
 }
 
-func (s *SalesService) DeleteSales(ctx context.Context, tenantID, currentUser string, id int64) error {
+func (s *SalesService) DeleteSale(
+	ctx context.Context,
+	tenantID string,
+	currentUser string,
+	id int64,
+) error {
 	existing, err := s.repo.GetByID(ctx, tenantID, id)
 	if err != nil {
 		return err
@@ -72,5 +98,6 @@ func (s *SalesService) DeleteSales(ctx context.Context, tenantID, currentUser st
 	existing.Deleted = true
 	existing.ModifiedBy = currentUser
 	existing.LastModified = time.Now().UTC()
+
 	return s.repo.Update(ctx, existing)
 }
