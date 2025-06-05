@@ -14,6 +14,7 @@ import (
 
 	"github.com/newssourcecrawler/realtorinstall/api/handlers"
 	apiRepos "github.com/newssourcecrawler/realtorinstall/api/repos"
+	"github.com/newssourcecrawler/realtorinstall/api/services"
 	apiServices "github.com/newssourcecrawler/realtorinstall/api/services"
 )
 
@@ -39,7 +40,7 @@ func main() {
 	commissionRepo, _ := apiRepos.NewSQLiteCommissionRepo("data/commissions.db")
 
 	// 3. Construct services
-	authSvc := apiServices.NewAuthService(userRepo)
+	authSvc := apiServices.NewAuthService(userRepo, "YOUR_VERY_LONG_SECRET_KEY", time.Hour*24)
 	propSvc := apiServices.NewPropertyService(propRepo, userRepo, pricingRepo)
 	//buyerSvc := apiServices.NewBuyerService(buyerRepo, userRepo)
 	buyerSvc := apiServices.NewBuyerService(buyerRepo)
@@ -62,7 +63,6 @@ func main() {
 	)
 
 	// 4. Instantiate handlers
-	authSvc := apiServices.NewAuthService(userRepo, "YOUR_VERY_LONG_SECRET_KEY", time.Hour*24)
 	authH := handlers.NewAuthHandler(authSvc)
 	propH := handlers.NewPropertyHandler(propSvc)
 	buyerH := handlers.NewBuyerHandler(buyerSvc)
@@ -84,13 +84,15 @@ func main() {
 
 	// 6. Authentication routes
 	router.POST("/login", authH.Login)
-	router.POST("/register", authH.Register)
+	//router.POST("/register", authH.Register)
+	router.POST("/register", AuthMiddleware(authSvc), AuthorizeRoles("admin", "manager"), authH.Register)
 
 	// 7. User CRUD routes
 	router.GET("/users", userH.List)
 	router.POST("/users", userH.Create)
 	router.PUT("/users/:id", userH.Update)
-	router.DELETE("/users/:id", userH.Delete)
+	//router.DELETE("/users/:id", userH.Delete)
+	router.DELETE("/users/:id", AuthMiddleware(authSvc), AuthorizeRoles("admin", "manager"), usersH.Delete)
 
 	// 8. Property routes
 	router.GET("/properties", propH.List)
@@ -114,44 +116,51 @@ func main() {
 	router.GET("/sales", salesH.List)
 	router.POST("/sales", salesH.Create)
 	router.PUT("/sales/:id", salesH.Update)
-	router.DELETE("/sales/:id", salesH.Delete)
+	//router.DELETE("/sales/:id", salesH.Delete)
+	router.DELETE("/sales/:id", AuthMiddleware(authSvc), AuthorizeRoles("admin", "manager"), salesH.Delete)
 
 	// 12. Introduction routes
 	router.GET("/introductions", introH.List)
 	router.POST("/introductions", introH.Create)
 	router.PUT("/introductions/:id", introH.Update)
-	router.DELETE("/introductions/:id", introH.Delete)
+	//router.DELETE("/introductions/:id", introH.Delete)
+	router.DELETE("/introductions/:id", AuthMiddleware(authSvc), AuthorizeRoles("admin", "manager"), introH.Delete)
 
 	// 13. Lettings routes
 	router.GET("/lettings", lettingsH.List)
 	router.POST("/lettings", lettingsH.Create)
 	router.PUT("/lettings/:id", lettingsH.Update)
-	router.DELETE("/lettings/:id", lettingsH.Delete)
+	//router.DELETE("/lettings/:id", lettingsH.Delete)
+	router.DELETE("/lettings/:id", AuthMiddleware(authSvc), AuthorizeRoles("admin", "manager"), lettingsH.Delete)
 
 	// 14. Plan routes
 	router.GET("/plans", planH.List)
 	router.POST("/plans", planH.Create)
 	router.PUT("/plans/:id", planH.Update)
-	router.DELETE("/plans/:id", planH.Delete)
+	//router.DELETE("/plans/:id", planH.Delete)
+	router.DELETE("/plans/:id", AuthMiddleware(authSvc), AuthorizeRoles("admin", "manager"), planH.Delete)
 
 	// 15. Installment routes
 	router.GET("/installments", instH.List)
 	router.GET("/installments/plan/:planId", instH.ListByPlan)
 	router.POST("/installments", instH.Create)
 	router.PUT("/installments/:id", instH.Update)
-	router.DELETE("/installments/:id", instH.Delete)
+	//router.DELETE("/installments/:id", instH.Delete)
+	router.DELETE("/installments/:id", AuthMiddleware(authSvc), AuthorizeRoles("admin", "manager"), instH.Delete)
 
 	// 16. Payment routes
 	router.GET("/payments", payH.List)
 	router.POST("/payments", payH.Create)
 	router.PUT("/payments/:id", payH.Update)
-	router.DELETE("/payments/:id", payH.Delete)
+	//router.DELETE("/payments/:id", payH.Delete)
+	router.DELETE("/payments/:id", AuthMiddleware(authSvc), AuthorizeRoles("admin", "manager"), payH.Delete)
 
 	// 17. Commission routes
 	router.GET("/commissions", commissionH.List)
 	router.POST("/commissions", commissionH.Create)
 	router.PUT("/commissions/:id", commissionH.Update)
-	router.DELETE("/commissions/:id", commissionH.Delete)
+	//router.DELETE("/commissions/:id", commissionH.Delete)
+	router.DELETE("/commissions/:id", AuthMiddleware(authSvc), AuthorizeRoles("admin", "manager"), commissionsH.Delete)
 
 	// 18. Reporting routes
 	router.GET("/reports/commissions/beneficiary", reportH.CommissionsByBeneficiary)
@@ -184,17 +193,21 @@ func main() {
 }
 
 // AuthMiddleware extracts tenantID + userID from JWT in Authorization header.
-func AuthMiddleware(secret string) gin.HandlerFunc {
+func AuthMiddleware(authSvc *services.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if !strings.HasPrefix(authHeader, "Bearer ") {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing bearer token"})
+		hdr := c.GetHeader("Authorization")
+		if !strings.HasPrefix(hdr, "Bearer ") {
+			c.AbortWithStatusJSON(401, gin.H{"error": "missing bearer token"})
 			return
 		}
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		claims, err := apiServices.ParseToken(tokenString, secret)
+		token := strings.TrimPrefix(hdr, "Bearer ")
+		claims, err := authSvc.ParseToken(token)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+			c.AbortWithStatusJSON(401, gin.H{"error": "invalid token"})
+			return
+		}
+		if claims.LicenseExp < time.Now().Unix() {
+			c.AbortWithStatusJSON(403, gin.H{"error": "license expired"})
 			return
 		}
 		c.Set("currentUser", claims.UserID)

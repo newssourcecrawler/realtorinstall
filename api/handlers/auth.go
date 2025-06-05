@@ -53,3 +53,16 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, user)
 }
+
+func AuthorizeRoles(allowed ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := c.GetInt64("currentUser")
+		tenantID := c.GetString("currentTenant")
+		user, err := userRepo.GetByID(context.Background(), tenantID, userID)
+		if err != nil || !contains(allowed, user.Role) {
+			c.AbortWithStatusJSON(403, gin.H{"error": "forbidden"})
+			return
+		}
+		c.Next()
+	}
+}
