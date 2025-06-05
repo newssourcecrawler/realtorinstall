@@ -49,6 +49,7 @@ func main() {
 	planH := handlers.NewPlanHandler(planSvc)
 	instH := handlers.NewInstallmentHandler(instSvc)
 	payH := handlers.NewPaymentHandler(paySvc)
+	reportH := handlers.NewReportHandler(reportSvc)
 
 	// 5. Build Gin router with CORS + JWT middleware
 	router := gin.Default()
@@ -95,6 +96,8 @@ func main() {
 	router.POST("/payments", payH.Create)
 	router.PUT("/payments/:id", payH.Update)
 	router.DELETE("/payments/:id", payH.Delete)
+
+	router.GET("/reports/commissions/beneficiary", reportH.CommissionsByBeneficiary)
 
 	// 13. Start HTTP server with graceful shutdown
 	srv := &http.Server{
