@@ -13,17 +13,17 @@ import (
 
 type CommissionService struct {
 	repo        repos.CommissionRepo
-	saleRepo    repos.SaleRepo         // or repos.InstallmentPlanRepo if you treat sales as installments
-	lettingRepo repos.LettingRepo      // if you have a separate letting table
-	introRepo   repos.IntroductionRepo // if you have an introduction table
+	saleRepo    repos.SalesRepo         // or repos.InstallmentPlanRepo if you treat sales as installments
+	lettingRepo repos.LettingsRepo      // if you have a separate letting table
+	introRepo   repos.IntroductionsRepo // if you have an introduction table
 	userRepo    repos.UserRepo
 }
 
 func NewCommissionService(
 	cr repos.CommissionRepo,
-	sr repos.SaleRepo,
-	lr repos.LettingRepo,
-	ir repos.IntroductionRepo,
+	sr repos.SalesRepo,
+	lr repos.LettingsRepo,
+	ir repos.IntroductionsRepo,
 	ur repos.UserRepo,
 ) *CommissionService {
 	return &CommissionService{
@@ -73,13 +73,13 @@ func (s *CommissionService) CreateCommission(
 		switch comm.TransactionType {
 		case "sale":
 			sale, _ := s.saleRepo.GetByID(ctx, tenantID, comm.TransactionID)
-			txnValue = sale.TotalPrice
+			txnValue = sale.SalePrice
 		case "letting":
 			let, _ := s.lettingRepo.GetByID(ctx, tenantID, comm.TransactionID)
-			txnValue = let.RentalAmount
+			txnValue = let.RentAmount
 		case "introduction":
 			intro, _ := s.introRepo.GetByID(ctx, tenantID, comm.TransactionID)
-			txnValue = intro.FeeAmount
+			txnValue = intro.AgreedFee
 		}
 		comm.CalculatedAmount = txnValue * comm.RateOrAmount
 	} else {
