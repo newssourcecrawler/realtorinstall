@@ -21,7 +21,7 @@ func NewLettingsHandler(svc *services.LettingsService) *LettingsHandler {
 
 func (h *LettingsHandler) List(c *gin.Context) {
 	tenantID := c.GetString("currentTenant")
-	list, err := h.svc.ListLettingss(context.Background(), tenantID)
+	list, err := h.svc.ListLettings(context.Background(), tenantID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -30,14 +30,14 @@ func (h *LettingsHandler) List(c *gin.Context) {
 }
 
 func (h *LettingsHandler) Create(c *gin.Context) {
-	var p models.InstallmentLettings
-	if err := c.BindJSON(&p); err != nil {
+	var lt models.Lettings
+	if err := c.BindJSON(&lt); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	tenantID := c.GetString("currentTenant")
 	currentUser := c.GetString("currentUser")
-	id, err := h.svc.CreateLettings(context.Background(), tenantID, currentUser, p)
+	id, err := h.svc.CreateLetting(context.Background(), tenantID, currentUser, lt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -49,19 +49,19 @@ func (h *LettingsHandler) Update(c *gin.Context) {
 	idStr := c.Param("id")
 	id64, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid Lettings ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid letting ID"})
 		return
 	}
-	var p models.InstallmentLettings
-	if err := c.BindJSON(&p); err != nil {
+	var lt models.Lettings
+	if err := c.BindJSON(&lt); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	tenantID := c.GetString("currentTenant")
 	currentUser := c.GetString("currentUser")
-	if err := h.svc.UpdateLettings(context.Background(), tenantID, currentUser, id64, p); err != nil {
+	if err := h.svc.UpdateLetting(context.Background(), tenantID, currentUser, id64, lt); err != nil {
 		if err == repos.ErrNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Lettings not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "letting not found"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -74,14 +74,14 @@ func (h *LettingsHandler) Delete(c *gin.Context) {
 	idStr := c.Param("id")
 	id64, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid Lettings ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid letting ID"})
 		return
 	}
 	tenantID := c.GetString("currentTenant")
 	currentUser := c.GetString("currentUser")
-	if err := h.svc.DeleteLettings(context.Background(), tenantID, currentUser, id64); err != nil {
+	if err := h.svc.DeleteLetting(context.Background(), tenantID, currentUser, id64); err != nil {
 		if err == repos.ErrNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Lettings not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "letting not found"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

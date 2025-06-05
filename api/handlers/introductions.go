@@ -21,9 +21,7 @@ func NewIntroductionsHandler(svc *services.IntroductionsService) *IntroductionsH
 
 func (h *IntroductionsHandler) List(c *gin.Context) {
 	tenantID := c.GetString("currentTenant")
-	filterType := c.GetString("currentType")
-	beneficiaryID := c.GetString("currentBeneficiaryID")
-	list, err := h.svc.ListIntroductionss(context.Background(), tenantID, filterType, beneficiaryID)
+	list, err := h.svc.ListIntroductions(context.Background(), tenantID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -32,14 +30,14 @@ func (h *IntroductionsHandler) List(c *gin.Context) {
 }
 
 func (h *IntroductionsHandler) Create(c *gin.Context) {
-	var b models.Introductions
-	if err := c.BindJSON(&b); err != nil {
+	var intro models.Introductions
+	if err := c.BindJSON(&intro); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	tenantID := c.GetString("currentTenant")
 	currentUser := c.GetString("currentUser")
-	id, err := h.svc.CreateIntroductions(context.Background(), tenantID, currentUser, b)
+	id, err := h.svc.CreateIntroduction(context.Background(), tenantID, currentUser, intro)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -51,19 +49,19 @@ func (h *IntroductionsHandler) Update(c *gin.Context) {
 	idStr := c.Param("id")
 	id64, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid Introductions ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid introduction ID"})
 		return
 	}
-	var b models.Introductions
-	if err := c.BindJSON(&b); err != nil {
+	var intro models.Introductions
+	if err := c.BindJSON(&intro); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	tenantID := c.GetString("currentTenant")
 	currentUser := c.GetString("currentUser")
-	if err := h.svc.UpdateIntroductions(context.Background(), tenantID, currentUser, id64, b); err != nil {
+	if err := h.svc.UpdateIntroduction(context.Background(), tenantID, currentUser, id64, intro); err != nil {
 		if err == repos.ErrNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Introductions not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "introduction not found"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -76,14 +74,14 @@ func (h *IntroductionsHandler) Delete(c *gin.Context) {
 	idStr := c.Param("id")
 	id64, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid Introductions ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid introduction ID"})
 		return
 	}
 	tenantID := c.GetString("currentTenant")
 	currentUser := c.GetString("currentUser")
-	if err := h.svc.DeleteIntroductions(context.Background(), tenantID, currentUser, id64); err != nil {
+	if err := h.svc.DeleteIntroduction(context.Background(), tenantID, currentUser, id64); err != nil {
 		if err == repos.ErrNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Introductions not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "introduction not found"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

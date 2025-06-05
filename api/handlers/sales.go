@@ -21,7 +21,7 @@ func NewSalesHandler(svc *services.SalesService) *SalesHandler {
 
 func (h *SalesHandler) List(c *gin.Context) {
 	tenantID := c.GetString("currentTenant")
-	list, err := h.svc.ListSaless(context.Background(), tenantID)
+	list, err := h.svc.ListSales(context.Background(), tenantID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -30,14 +30,14 @@ func (h *SalesHandler) List(c *gin.Context) {
 }
 
 func (h *SalesHandler) Create(c *gin.Context) {
-	var p models.InstallmentSales
-	if err := c.BindJSON(&p); err != nil {
+	var lt models.Sales
+	if err := c.BindJSON(&lt); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	tenantID := c.GetString("currentTenant")
 	currentUser := c.GetString("currentUser")
-	id, err := h.svc.CreateSales(context.Background(), tenantID, currentUser, p)
+	id, err := h.svc.CreateSales(context.Background(), tenantID, currentUser, lt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -52,14 +52,14 @@ func (h *SalesHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid Sales ID"})
 		return
 	}
-	var p models.InstallmentSales
-	if err := c.BindJSON(&p); err != nil {
+	var lt models.Sales
+	if err := c.BindJSON(&lt); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	tenantID := c.GetString("currentTenant")
 	currentUser := c.GetString("currentUser")
-	if err := h.svc.UpdateSales(context.Background(), tenantID, currentUser, id64, p); err != nil {
+	if err := h.svc.UpdateSales(context.Background(), tenantID, currentUser, id64, lt); err != nil {
 		if err == repos.ErrNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Sales not found"})
 			return
