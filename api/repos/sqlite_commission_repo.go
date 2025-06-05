@@ -223,3 +223,14 @@ func (r *sqliteCommissionRepo) Delete(ctx context.Context, tenantID string, id i
 	)
 	return err
 }
+
+func (r *sqliteCommissionRepo) QueryCommissionByBeneficiary(ctx context.Context, tenantID string) (*sql.Rows, error) {
+	query := `
+		SELECT beneficiary_id, SUM(calculated_amount) AS total_commission
+      		FROM commissions
+      		WHERE deleted = 0 AND tenant_id = ?
+      		GROUP BY beneficiary_id;  
+			`
+	return r.db.QueryContext(ctx, query, tenantID)
+
+}
