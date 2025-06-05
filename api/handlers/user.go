@@ -30,14 +30,14 @@ func (h *UserHandler) List(c *gin.Context) {
 }
 
 func (h *UserHandler) Create(c *gin.Context) {
-	var b models.User
-	if err := c.BindJSON(&b); err != nil {
+	var u models.User
+	if err := c.BindJSON(&u); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	tenantID := c.GetString("currentTenant")
 	currentUser := c.GetString("currentUser")
-	id, err := h.svc.CreateUser(context.Background(), tenantID, currentUser, b)
+	id, err := h.svc.CreateUser(context.Background(), tenantID, currentUser, u)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -49,19 +49,19 @@ func (h *UserHandler) Update(c *gin.Context) {
 	idStr := c.Param("id")
 	id64, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid User ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user ID"})
 		return
 	}
-	var b models.User
-	if err := c.BindJSON(&b); err != nil {
+	var u models.User
+	if err := c.BindJSON(&u); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	tenantID := c.GetString("currentTenant")
 	currentUser := c.GetString("currentUser")
-	if err := h.svc.UpdateUser(context.Background(), tenantID, currentUser, id64, b); err != nil {
+	if err := h.svc.UpdateUser(context.Background(), tenantID, currentUser, id64, u); err != nil {
 		if err == repos.ErrNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -74,14 +74,14 @@ func (h *UserHandler) Delete(c *gin.Context) {
 	idStr := c.Param("id")
 	id64, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid User ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user ID"})
 		return
 	}
 	tenantID := c.GetString("currentTenant")
 	currentUser := c.GetString("currentUser")
 	if err := h.svc.DeleteUser(context.Background(), tenantID, currentUser, id64); err != nil {
 		if err == repos.ErrNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
