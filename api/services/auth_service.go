@@ -32,9 +32,9 @@ func NewAuthService(userRepo repos.UserRepo, jwtSecret string, tokenTTL time.Dur
 	}
 }
 
-// RegisterUser registers a brand‐new user. It hashes the provided rawPassword before saving.
+// Register registers a brand‐new user. It hashes the provided rawPassword before saving.
 // Returns ErrUserAlreadyExists if the username is already taken.
-func (s *AuthService) RegisterUser(
+func (s *AuthService) Register(
 	ctx context.Context,
 	tenantID string,
 	currentUser string,

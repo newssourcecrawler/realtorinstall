@@ -14,7 +14,6 @@ import (
 
 	"github.com/newssourcecrawler/realtorinstall/api/handlers"
 	apiRepos "github.com/newssourcecrawler/realtorinstall/api/repos"
-	"github.com/newssourcecrawler/realtorinstall/api/services"
 	apiServices "github.com/newssourcecrawler/realtorinstall/api/services"
 )
 
@@ -33,16 +32,19 @@ func main() {
 	instRepo, _ := apiRepos.NewSQLiteInstallmentRepo("data/installments.db")
 	payRepo, _ := apiRepos.NewSQLitePaymentRepo("data/payments.db")
 
-	// New repositories for additional domains:
 	salesRepo, _ := apiRepos.NewSQLiteSalesRepo("data/sales.db")
 	introRepo, _ := apiRepos.NewSQLiteIntroductionsRepo("data/introductions.db")
 	lettingsRepo, _ := apiRepos.NewSQLiteLettingsRepo("data/lettings.db")
 	commissionRepo, _ := apiRepos.NewSQLiteCommissionRepo("data/commissions.db")
 
 	// 3. Construct services
-	authSvc := apiServices.NewAuthService(userRepo, "YOUR_VERY_LONG_SECRET_KEY", time.Hour*24)
+	jwtSecret := os.Getenv("APP_JWT_SECRET")
+	if jwtSecret == "" {
+		panic("APP_JWT_SECRET must be set")
+	}
+	authSvc := apiServices.NewAuthService(userRepo, jwtSecret, time.Hour*24)
+
 	propSvc := apiServices.NewPropertyService(propRepo, userRepo, pricingRepo)
-	//buyerSvc := apiServices.NewBuyerService(buyerRepo, userRepo)
 	buyerSvc := apiServices.NewBuyerService(buyerRepo)
 	pricingSvc := apiServices.NewPricingService(pricingRepo)
 	planSvc := apiServices.NewPlanService(planRepo, instRepo)
@@ -54,12 +56,11 @@ func main() {
 	lettingsSvc := apiServices.NewLettingsService(lettingsRepo)
 	commissionSvc := apiServices.NewCommissionService(commissionRepo, salesRepo, lettingsRepo, introRepo, userRepo)
 
-	// Assume ReportService aggregates from multiple repos:
 	reportSvc := apiServices.NewReportService(
 		commissionRepo,
 		salesRepo,
 		pricingRepo,
-		// add any other repos needed for reporting
+		// add other repos if needed
 	)
 
 	// 4. Instantiate handlers
@@ -80,87 +81,206 @@ func main() {
 	// 5. Build Gin router with CORS + JWT middleware
 	router := gin.Default()
 	router.Use(cors.Default())
-	router.Use(AuthMiddleware("YOUR_JWT_SECRET"))
+	router.Use(AuthMiddleware(authSvc, userRepo))
 
 	// 6. Authentication routes
 	router.POST("/login", authH.Login)
-	//router.POST("/register", authH.Register)
-	router.POST("/register", AuthMiddleware(authSvc), AuthorizeRoles("admin", "manager"), authH.Register)
+	router.POST("/register",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		authH.Register,
+	)
 
 	// 7. User CRUD routes
 	router.GET("/users", userH.List)
 	router.POST("/users", userH.Create)
 	router.PUT("/users/:id", userH.Update)
-	//router.DELETE("/users/:id", userH.Delete)
-	router.DELETE("/users/:id", AuthMiddleware(authSvc), AuthorizeRoles("admin", "manager"), usersH.Delete)
+	router.DELETE("/users/:id",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		userH.Delete,
+	)
 
 	// 8. Property routes
 	router.GET("/properties", propH.List)
-	router.POST("/properties", propH.Create)
-	router.PUT("/properties/:id", propH.Update)
-	router.DELETE("/properties/:id", propH.Delete)
+	router.POST("/properties",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		propH.Create,
+	)
+	router.PUT("/properties/:id",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		propH.Update,
+	)
+	router.DELETE("/properties/:id",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		propH.Delete,
+	)
 
 	// 9. Buyer routes
 	router.GET("/buyers", buyerH.List)
-	router.POST("/buyers", buyerH.Create)
-	router.PUT("/buyers/:id", buyerH.Update)
-	router.DELETE("/buyers/:id", buyerH.Delete)
+	router.POST("/buyers",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		buyerH.Create,
+	)
+	router.PUT("/buyers/:id",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		buyerH.Update,
+	)
+	router.DELETE("/buyers/:id",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		buyerH.Delete,
+	)
 
 	// 10. Pricing routes
 	router.GET("/pricing", priceH.List)
-	router.POST("/pricing", priceH.Create)
-	router.PUT("/pricing/:id", priceH.Update)
-	router.DELETE("/pricing/:id", priceH.Delete)
+	router.POST("/pricing",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		priceH.Create,
+	)
+	router.PUT("/pricing/:id",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		priceH.Update,
+	)
+	router.DELETE("/pricing/:id",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		priceH.Delete,
+	)
 
 	// 11. Sales routes
 	router.GET("/sales", salesH.List)
-	router.POST("/sales", salesH.Create)
-	router.PUT("/sales/:id", salesH.Update)
-	//router.DELETE("/sales/:id", salesH.Delete)
-	router.DELETE("/sales/:id", AuthMiddleware(authSvc), AuthorizeRoles("admin", "manager"), salesH.Delete)
+	router.POST("/sales",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		salesH.Create,
+	)
+	router.PUT("/sales/:id",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		salesH.Update,
+	)
+	router.DELETE("/sales/:id",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		salesH.Delete,
+	)
 
 	// 12. Introduction routes
 	router.GET("/introductions", introH.List)
-	router.POST("/introductions", introH.Create)
-	router.PUT("/introductions/:id", introH.Update)
-	//router.DELETE("/introductions/:id", introH.Delete)
-	router.DELETE("/introductions/:id", AuthMiddleware(authSvc), AuthorizeRoles("admin", "manager"), introH.Delete)
+	router.POST("/introductions",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		introH.Create,
+	)
+	router.PUT("/introductions/:id",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		introH.Update,
+	)
+	router.DELETE("/introductions/:id",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		introH.Delete,
+	)
 
 	// 13. Lettings routes
 	router.GET("/lettings", lettingsH.List)
-	router.POST("/lettings", lettingsH.Create)
-	router.PUT("/lettings/:id", lettingsH.Update)
-	//router.DELETE("/lettings/:id", lettingsH.Delete)
-	router.DELETE("/lettings/:id", AuthMiddleware(authSvc), AuthorizeRoles("admin", "manager"), lettingsH.Delete)
+	router.POST("/lettings",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		lettingsH.Create,
+	)
+	router.PUT("/lettings/:id",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		lettingsH.Update,
+	)
+	router.DELETE("/lettings/:id",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		lettingsH.Delete,
+	)
 
 	// 14. Plan routes
 	router.GET("/plans", planH.List)
-	router.POST("/plans", planH.Create)
-	router.PUT("/plans/:id", planH.Update)
-	//router.DELETE("/plans/:id", planH.Delete)
-	router.DELETE("/plans/:id", AuthMiddleware(authSvc), AuthorizeRoles("admin", "manager"), planH.Delete)
+	router.POST("/plans",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		planH.Create,
+	)
+	router.PUT("/plans/:id",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		planH.Update,
+	)
+	router.DELETE("/plans/:id",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		planH.Delete,
+	)
 
 	// 15. Installment routes
 	router.GET("/installments", instH.List)
 	router.GET("/installments/plan/:planId", instH.ListByPlan)
-	router.POST("/installments", instH.Create)
-	router.PUT("/installments/:id", instH.Update)
-	//router.DELETE("/installments/:id", instH.Delete)
-	router.DELETE("/installments/:id", AuthMiddleware(authSvc), AuthorizeRoles("admin", "manager"), instH.Delete)
+	router.POST("/installments",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		instH.Create,
+	)
+	router.PUT("/installments/:id",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		instH.Update,
+	)
+	router.DELETE("/installments/:id",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		instH.Delete,
+	)
 
 	// 16. Payment routes
 	router.GET("/payments", payH.List)
-	router.POST("/payments", payH.Create)
-	router.PUT("/payments/:id", payH.Update)
-	//router.DELETE("/payments/:id", payH.Delete)
-	router.DELETE("/payments/:id", AuthMiddleware(authSvc), AuthorizeRoles("admin", "manager"), payH.Delete)
+	router.POST("/payments",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		payH.Create,
+	)
+	router.PUT("/payments/:id",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		payH.Update,
+	)
+	router.DELETE("/payments/:id",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		payH.Delete,
+	)
 
 	// 17. Commission routes
 	router.GET("/commissions", commissionH.List)
-	router.POST("/commissions", commissionH.Create)
-	router.PUT("/commissions/:id", commissionH.Update)
-	//router.DELETE("/commissions/:id", commissionH.Delete)
-	router.DELETE("/commissions/:id", AuthMiddleware(authSvc), AuthorizeRoles("admin", "manager"), commissionsH.Delete)
+	router.POST("/commissions",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		commissionH.Create,
+	)
+	router.PUT("/commissions/:id",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		commissionH.Update,
+	)
+	router.DELETE("/commissions/:id",
+		AuthMiddleware(authSvc, userRepo),
+		AuthorizeRoles(userRepo, "admin", "manager"),
+		commissionH.Delete,
+	)
 
 	// 18. Reporting routes
 	router.GET("/reports/commissions/beneficiary", reportH.CommissionsByBeneficiary)
@@ -193,25 +313,50 @@ func main() {
 }
 
 // AuthMiddleware extracts tenantID + userID from JWT in Authorization header.
-func AuthMiddleware(authSvc *services.AuthService) gin.HandlerFunc {
+func AuthMiddleware(authSvc *apiServices.AuthService, userRepo apiRepos.UserRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		hdr := c.GetHeader("Authorization")
 		if !strings.HasPrefix(hdr, "Bearer ") {
-			c.AbortWithStatusJSON(401, gin.H{"error": "missing bearer token"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing bearer token"})
 			return
 		}
 		token := strings.TrimPrefix(hdr, "Bearer ")
 		claims, err := authSvc.ParseToken(token)
 		if err != nil {
-			c.AbortWithStatusJSON(401, gin.H{"error": "invalid token"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			return
 		}
-		if claims.LicenseExp < time.Now().Unix() {
-			c.AbortWithStatusJSON(403, gin.H{"error": "license expired"})
-			return
-		}
+		// Check license expiry if you embedded LicenseExp in JWT (optional)
+		// if claims.LicenseExp < time.Now().Unix() {
+		//     c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "license expired"})
+		//     return
+		// }
+
 		c.Set("currentUser", claims.UserID)
 		c.Set("currentTenant", claims.TenantID)
+		c.Next()
+	}
+}
+
+// AuthorizeRoles checks that the logged‐in user's role is one of the allowed list.
+func AuthorizeRoles(userRepo apiRepos.UserRepo, allowed ...string) gin.HandlerFunc {
+	isAllowed := func(role string) bool {
+		for _, r := range allowed {
+			if r == role {
+				return true
+			}
+		}
+		return false
+	}
+
+	return func(c *gin.Context) {
+		userID := c.GetInt64("currentUser")
+		tenantID := c.GetString("currentTenant")
+		user, err := userRepo.GetByID(context.Background(), tenantID, userID)
+		if err != nil || user.Deleted || !isAllowed(user.Role) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
 		c.Next()
 	}
 }
