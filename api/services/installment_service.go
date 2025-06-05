@@ -3,7 +3,6 @@ package services
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/newssourcecrawler/realtorinstall/api/models"
@@ -21,7 +20,7 @@ func NewInstallmentService(r repos.InstallmentRepo, pr repos.PaymentRepo) *Insta
 
 func (s *InstallmentService) CreateInstallment(ctx context.Context, tenantID, currentUser string, inst models.Installment) (int64, error) {
 	if inst.PlanID == 0 {
-		return 0, errors.New("plan_id is required")
+		return 0, repos.ErrCreateInstallmentPlanIDReq
 	}
 	now := time.Now().UTC()
 	inst.TenantID = tenantID

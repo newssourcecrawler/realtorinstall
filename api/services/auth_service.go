@@ -2,40 +2,62 @@ package services
 
 import (
 	"context"
-	"errors"
 	"time"
+
+	"github.com/golang-jwt/jwt/v4"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 	"github.com/newssourcecrawler/realtorinstall/api/repos"
-	"golang.org/x/crypto/bcrypt"
 )
 
-var ErrInvalidCredentials = errors.New("invalid username or password")
+// JWTClaims defines the custom fields stored in our JWT.
+type JWTClaims struct {
+	UserID   int64  `json:"user_id"`
+	TenantID string `json:"tenant_id"`
+	jwt.RegisteredClaims
+}
 
 type AuthService struct {
-	repo repos.UserRepo
+	userRepo  repos.UserRepo
+	jwtSecret []byte
+	ttl       time.Duration
 }
 
-func NewAuthService(r repos.UserRepo) *AuthService {
-	return &AuthService{repo: r}
+func NewAuthService(userRepo repos.UserRepo, jwtSecret string, tokenTTL time.Duration) *AuthService {
+	return &AuthService{
+		userRepo:  userRepo,
+		jwtSecret: []byte(jwtSecret),
+		ttl:       tokenTTL,
+	}
 }
 
-func (s *AuthService) Register(
+// RegisterUser registers a brand‐new user. It hashes the provided rawPassword before saving.
+// Returns ErrUserAlreadyExists if the username is already taken.
+func (s *AuthService) RegisterUser(
 	ctx context.Context,
 	tenantID string,
 	currentUser string,
 	u models.User,
 	rawPassword string,
 ) (int64, error) {
-	// Required fields
-	if u.UserName == "" || u.Role == "" || u.FirstName == "" || u.LastName == "" {
-		return 0, errors.New("username, role, first name, and last name are required")
+	// Mandatory fields
+	if u.UserName == "" || u.FirstName == "" || u.LastName == "" || u.Role == "" {
+		return 0, repos.ErrInvalidRegistration
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(rawPassword), bcrypt.DefaultCost)
+
+	// Check if username already exists
+	if existing, _ := s.userRepo.GetByUsername(ctx, tenantID, u.UserName); existing != nil {
+		return 0, repos.ErrUserAlreadyExists
+	}
+
+	// Hash password
+	hashed, err := bcrypt.GenerateFromPassword([]byte(rawPassword), bcrypt.DefaultCost)
 	if err != nil {
-		return 0, err
+		return 0, repos.ErrGenerateFromPassword
 	}
-	u.PasswordHash = string(hash)
+	u.PasswordHash = string(hashed)
+
 	now := time.Now().UTC()
 	u.TenantID = tenantID
 	u.CreatedAt = now
@@ -44,21 +66,59 @@ func (s *AuthService) Register(
 	u.ModifiedBy = currentUser
 	u.Deleted = false
 
-	return s.repo.Create(ctx, &u)
+	return s.userRepo.Create(ctx, &u)
 }
 
-func (s *AuthService) Authenticate(
+// Login authenticates a user by username+password, and if successful returns a signed JWT string.
+func (s *AuthService) Login(
 	ctx context.Context,
 	tenantID string,
 	username string,
 	password string,
-) (*models.User, error) {
-	user, err := s.repo.GetByUsername(ctx, tenantID, username)
+) (string, error) {
+	user, err := s.userRepo.GetByUsername(ctx, tenantID, username)
 	if err != nil {
-		return nil, ErrInvalidCredentials
+		return "", repos.ErrInvalidCredentials
 	}
+
+	// Compare password hashes
 	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)) != nil {
-		return nil, ErrInvalidCredentials
+		return "", repos.ErrInvalidCredentials
 	}
-	return user, nil
+
+	// Build claims
+	now := time.Now().UTC()
+	claims := JWTClaims{
+		UserID:   user.ID,
+		TenantID: user.TenantID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(s.ttl)),
+			Issuer:    "realtor-installment-app",
+			Subject:   username,
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := token.SignedString(s.jwtSecret)
+	if err != nil {
+		return "", repos.ErrSignedString
+	}
+	return signed, nil
+}
+
+// ParseToken validates a JWT string, returns its custom claims if valid, or an error.
+func (s *AuthService) ParseToken(tokenStr string) (*JWTClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenStr, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return s.jwtSecret, nil
+	})
+	if err != nil {
+		return nil, repos.ErrParseWithClaims
+	}
+	claims, ok := token.Claims.(*JWTClaims)
+	if !ok || !token.Valid {
+		return nil, repos.ErrInvalidTokenClaims
+	}
+	return claims, nil
 }
