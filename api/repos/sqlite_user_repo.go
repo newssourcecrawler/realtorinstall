@@ -167,7 +167,7 @@ func (r *sqliteUserRepo) ListAll(ctx context.Context, tenantID string) ([]*model
 	FROM users
 	WHERE tenant_id = ? AND deleted = 0;
 	`
-	rows, err := r.db.QueryContext(ctx, query, tenantID) // <-- use QueryContext, not QueryRowContext
+	rows, err := r.db.QueryContext(ctx, query, tenantID)
 	if err != nil {
 		return nil, err
 	}

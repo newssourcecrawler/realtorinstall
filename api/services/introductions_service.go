@@ -1,0 +1,171 @@
+package services
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/newssourcecrawler/realtorinstall/api/models"
+	"github.com/newssourcecrawler/realtorinstall/api/repos"
+)
+
+type IntroductionsService struct {
+	repo        repos.IntroductionsRepo
+	saleRepo    repos.SalesRepo         // or repos.InstallmentPlanRepo if you treat sales as installments
+	lettingRepo repos.LettingsRepo      // if you have a separate letting table
+	introRepo   repos.IntroductionsRepo // if you have an introduction table
+	userRepo    repos.UserRepo
+}
+
+func NewIntroductionsService(
+	cr repos.IntroductionsRepo,
+	sr repos.SalesRepo,
+	lr repos.LettingsRepo,
+	ir repos.IntroductionsRepo,
+	ur repos.UserRepo,
+) *IntroductionsService {
+	return &IntroductionsService{
+		repo:        cr,
+		saleRepo:    sr,
+		lettingRepo: lr,
+		introRepo:   ir,
+		userRepo:    ur,
+	}
+}
+
+func (s *IntroductionsService) CreateIntroductions(
+	ctx context.Context,
+	tenantID string,
+	currentUser string,
+	comm models.Introductions,
+) (int64, error) {
+	// Must have required fields
+	if comm.TransactionType == "" || comm.TransactionID == 0 || comm.BeneficiaryID == 0 || comm.IntroductionsType == "" {
+		return 0, errors.New("missing required Introductions fields")
+	}
+	// Validate transaction exists (optional)
+	switch comm.TransactionType {
+	case "sale":
+		if _, err := s.saleRepo.GetByID(ctx, tenantID, comm.TransactionID); err != nil {
+			return 0, errors.New("sale not found")
+		}
+	case "letting":
+		if _, err := s.lettingRepo.GetByID(ctx, tenantID, comm.TransactionID); err != nil {
+			return 0, errors.New("letting not found")
+		}
+	case "introduction":
+		if _, err := s.introRepo.GetByID(ctx, tenantID, comm.TransactionID); err != nil {
+			return 0, errors.New("introduction not found")
+		}
+	default:
+		return 0, errors.New("invalid transaction type")
+	}
+	// Validate beneficiary exists
+	if _, err := s.userRepo.GetByID(ctx, tenantID, comm.BeneficiaryID); err != nil {
+		return 0, errors.New("beneficiary user not found")
+	}
+
+	// Calculate “calculated_amount” if percentage
+	if comm.IntroductionsType == "percentage" {
+		var txnValue float64
+		switch comm.TransactionType {
+		case "sale":
+			sale, _ := s.saleRepo.GetByID(ctx, tenantID, comm.TransactionID)
+			txnValue = sale.SalePrice
+		case "letting":
+			let, _ := s.lettingRepo.GetByID(ctx, tenantID, comm.TransactionID)
+			txnValue = let.RentAmount
+		case "introduction":
+			intro, _ := s.introRepo.GetByID(ctx, tenantID, comm.TransactionID)
+			txnValue = intro.AgreedFee
+		}
+		comm.CalculatedAmount = txnValue * comm.RateOrAmount
+	} else {
+		// For “fixed” or “credit”, assume RateOrAmount already holds the exact number
+		comm.CalculatedAmount = comm.RateOrAmount
+	}
+
+	now := time.Now().UTC()
+	comm.TenantID = tenantID
+	comm.CreatedAt = now
+	comm.LastModified = now
+	comm.CreatedBy = currentUser
+	comm.ModifiedBy = currentUser
+	comm.Deleted = false
+
+	return s.repo.Create(ctx, &comm)
+}
+
+func (s *IntroductionsService) ListIntroductionss(
+	ctx context.Context,
+	tenantID string,
+	filterType string, // optional; “sale” | “letting” | “introduction” | “” for all
+	beneficiaryID int64, // optional; 0 = no filter
+) ([]models.Introductions, error) {
+	rows, err := s.repo.ListAll(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]models.Introductions, 0, len(rows))
+	for _, c := range rows {
+		if c.Deleted {
+			continue
+		}
+		if filterType != "" && c.TransactionType != filterType {
+			continue
+		}
+		if beneficiaryID != 0 && c.BeneficiaryID != beneficiaryID {
+			continue
+		}
+		out = append(out, *c)
+	}
+	return out, nil
+}
+
+// GET /reports/Introductionss/by‐beneficiary
+func (h *ReportHandler) IntroductionssByBeneficiary(c *gin.Context) {
+	tenantID := c.GetString("currentTenant")
+	data, err := h.svc.GetIntroductionssByBeneficiary(c.Request.Context(), tenantID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, data)
+}
+
+func (s *BuyerService) UpdateIntroductions(ctx context.Context, tenantID, currentUser string, id int64, c models.Introductions) error {
+	existing, err := s.repo.GetByID(ctx, tenantID, id)
+	if err != nil {
+		return err
+	}
+	if existing.Deleted {
+		return repos.ErrNotFound
+	}
+	now := time.Now().UTC()
+	c.TenantID = tenantID
+	c.ID = id
+	c.ModifiedBy = currentUser
+	c.LastModified = now
+	return s.repo.Update(ctx, &c)
+}
+
+func (s *IntroductionsService) DeleteIntroductions(
+	ctx context.Context,
+	tenantID string,
+	currentUser string,
+	id int64,
+) error {
+	existing, err := s.repo.GetByID(ctx, tenantID, id)
+	if err != nil {
+		return err
+	}
+	if existing.Deleted {
+		return repos.ErrNotFound
+	}
+	existing.Deleted = true
+	existing.ModifiedBy = currentUser
+	existing.LastModified = time.Now().UTC()
+	return s.repo.Update(ctx, existing)
+}

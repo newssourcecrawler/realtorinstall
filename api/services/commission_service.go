@@ -135,6 +135,22 @@ func (h *ReportHandler) CommissionsByBeneficiary(c *gin.Context) {
 	c.JSON(http.StatusOK, data)
 }
 
+func (s *BuyerService) UpdateCommission(ctx context.Context, tenantID, currentUser string, id int64, c models.Commission) error {
+	existing, err := s.repo.GetByID(ctx, tenantID, id)
+	if err != nil {
+		return err
+	}
+	if existing.Deleted {
+		return repos.ErrNotFound
+	}
+	now := time.Now().UTC()
+	c.TenantID = tenantID
+	c.ID = id
+	c.ModifiedBy = currentUser
+	c.LastModified = now
+	return s.repo.Update(ctx, &c)
+}
+
 func (s *CommissionService) DeleteCommission(
 	ctx context.Context,
 	tenantID string,

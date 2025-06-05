@@ -7,7 +7,7 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/newssourcecrawler/realtorcommall/api/models"
+	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
 
 type sqliteCommissionRepo struct {
@@ -20,25 +20,25 @@ func NewSQLiteCommissionRepo(dbPath string) (CommissionRepo, error) {
 		return nil, err
 	}
 	schema := `
-	CREATE TABLE commissions (
-		id                INTEGER PRIMARY KEY AUTOINCREMENT,
-		tenant_id         TEXT    NOT NULL,     -- multi‐tenant support
-		transaction_type  TEXT    NOT NULL,     -- “sale” | “letting” | “introduction”
-		transaction_id    INTEGER NOT NULL,     -- e.g. sale.id, letting.id, or intro.id
-		beneficiary_id    INTEGER NOT NULL,     -- foreign key to users/employees table, or an external party
-		commission_type   TEXT    NOT NULL,     -- “percentage” | “fixed” | “credit”
-		rate_or_amount    REAL    NOT NULL,     -- if percentage, store % as decimal (0.03); if fixed or credit, store flat amount
-		calculated_amount REAL    NOT NULL,     -- actual money owed (pre‐tax/fees)
-		memo              TEXT,                 -- optional description
-		created_by        TEXT    NOT NULL,
-		created_at        DATETIME NOT NULL,
-		modified_by       TEXT    NOT NULL,
-		last_modified     DATETIME NOT NULL,
-		deleted           INTEGER NOT NULL DEFAULT 0
-		);
-	CREATE INDEX idx_commissions_tenant ON commissions(tenant_id);
-	CREATE INDEX idx_commissions_txn     ON commissions(transaction_type, transaction_id);
-	CREATE INDEX idx_commissions_benef    ON commissions(beneficiary_id);
+	CREATE TABLE IF NOT EXISTS commissions (
+	  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+	  tenant_id         TEXT    NOT NULL,
+	  transaction_type  TEXT    NOT NULL,
+	  transaction_id    INTEGER NOT NULL,
+	  beneficiary_id    INTEGER NOT NULL,
+	  commission_type   TEXT    NOT NULL,
+	  rate_or_amount    REAL    NOT NULL,
+	  calculated_amount REAL    NOT NULL,
+	  memo              TEXT,
+	  created_by        TEXT    NOT NULL,
+	  created_at        DATETIME NOT NULL,
+	  modified_by       TEXT    NOT NULL,
+	  last_modified     DATETIME NOT NULL,
+	  deleted           INTEGER NOT NULL DEFAULT 0
+	);
+	CREATE INDEX IF NOT EXISTS idx_commissions_tenant ON commissions(tenant_id);
+	CREATE INDEX IF NOT EXISTS idx_commissions_txn     ON commissions(transaction_type, transaction_id);
+	CREATE INDEX IF NOT EXISTS idx_commissions_benef    ON commissions(beneficiary_id);
 	`
 	if _, err := db.Exec(schema); err != nil {
 		return nil, err
@@ -47,7 +47,13 @@ func NewSQLiteCommissionRepo(dbPath string) (CommissionRepo, error) {
 }
 
 func (r *sqliteCommissionRepo) Create(ctx context.Context, comm *models.Commission) (int64, error) {
-	if comm.TenantID == "" || comm.PlanID == 0 || comm.CreatedBy == "" || comm.ModifiedBy == "" {
+	if comm.TenantID == "" ||
+		comm.TransactionType == "" ||
+		comm.TransactionID == 0 ||
+		comm.BeneficiaryID == 0 ||
+		comm.CommissionType == "" ||
+		comm.CreatedBy == "" ||
+		comm.ModifiedBy == "" {
 		return 0, errors.New("missing required fields or tenant/audit info")
 	}
 	now := time.Now().UTC()
@@ -55,21 +61,21 @@ func (r *sqliteCommissionRepo) Create(ctx context.Context, comm *models.Commissi
 	comm.LastModified = now
 
 	query := `
-	INSERT INTO Commissions (
-	  tenant_id, plan_id, sequence_number, due_date, amount_due, amount_paid, status, late_fee, paid_date,
+	INSERT INTO commissions (
+	  tenant_id, transaction_type, transaction_id, beneficiary_id,
+	  commission_type, rate_or_amount, calculated_amount, memo,
 	  created_by, created_at, modified_by, last_modified, deleted
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0);
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0);
 	`
 	res, err := r.db.ExecContext(ctx, query,
 		comm.TenantID,
-		comm.PlanID,
-		comm.SequenceNumber,
-		comm.DueDate,
-		comm.AmountDue,
-		comm.AmountPaid,
-		comm.Status,
-		comm.LateFee,
-		comm.PaidDate,
+		comm.TransactionType,
+		comm.TransactionID,
+		comm.BeneficiaryID,
+		comm.CommissionType,
+		comm.RateOrAmount,
+		comm.CalculatedAmount,
+		comm.Memo,
 		comm.CreatedBy,
 		comm.CreatedAt,
 		comm.ModifiedBy,
@@ -83,9 +89,10 @@ func (r *sqliteCommissionRepo) Create(ctx context.Context, comm *models.Commissi
 
 func (r *sqliteCommissionRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.Commission, error) {
 	query := `
-	SELECT id, tenant_id, plan_id, sequence_number, due_date, amount_due, amount_paid, status, late_fee, paid_date,
+	SELECT id, tenant_id, transaction_type, transaction_id, beneficiary_id,
+	       commission_type, rate_or_amount, calculated_amount, memo,
 	       created_by, created_at, modified_by, last_modified, deleted
-	FROM Commissions
+	FROM commissions
 	WHERE tenant_id = ? AND id = ? AND deleted = 0;
 	`
 	row := r.db.QueryRowContext(ctx, query, tenantID, id)
@@ -95,14 +102,13 @@ func (r *sqliteCommissionRepo) GetByID(ctx context.Context, tenantID string, id 
 	err := row.Scan(
 		&comm.ID,
 		&comm.TenantID,
-		&comm.PlanID,
-		&comm.SequenceNumber,
-		&comm.DueDate,
-		&comm.AmountDue,
-		&comm.AmountPaid,
-		&comm.Status,
-		&comm.LateFee,
-		&comm.PaidDate,
+		&comm.TransactionType,
+		&comm.TransactionID,
+		&comm.BeneficiaryID,
+		&comm.CommissionType,
+		&comm.RateOrAmount,
+		&comm.CalculatedAmount,
+		&comm.Memo,
 		&comm.CreatedBy,
 		&comm.CreatedAt,
 		&comm.ModifiedBy,
@@ -115,15 +121,16 @@ func (r *sqliteCommissionRepo) GetByID(ctx context.Context, tenantID string, id 
 	if err != nil {
 		return nil, err
 	}
-	comm.Deleted = deletedInt != 0
+	comm.Deleted = (deletedInt != 0)
 	return &comm, nil
 }
 
 func (r *sqliteCommissionRepo) ListAll(ctx context.Context, tenantID string) ([]*models.Commission, error) {
 	query := `
-	SELECT id, tenant_id, plan_id, sequence_number, due_date, amount_due, amount_paid, status, late_fee, paid_date,
+	SELECT id, tenant_id, transaction_type, transaction_id, beneficiary_id,
+	       commission_type, rate_or_amount, calculated_amount, memo,
 	       created_by, created_at, modified_by, last_modified, deleted
-	FROM Commissions
+	FROM commissions
 	WHERE tenant_id = ? AND deleted = 0;
 	`
 	rows, err := r.db.QueryContext(ctx, query, tenantID)
@@ -139,56 +146,13 @@ func (r *sqliteCommissionRepo) ListAll(ctx context.Context, tenantID string) ([]
 		if err := rows.Scan(
 			&comm.ID,
 			&comm.TenantID,
-			&comm.PlanID,
-			&comm.SequenceNumber,
-			&comm.DueDate,
-			&comm.AmountDue,
-			&comm.AmountPaid,
-			&comm.Status,
-			&comm.LateFee,
-			&comm.PaidDate,
-			&comm.CreatedBy,
-			&comm.CreatedAt,
-			&comm.ModifiedBy,
-			&comm.LastModified,
-			&deletedInt,
-		); err != nil {
-			return nil, err
-		}
-		comm.Deleted = deletedInt != 0
-		out = append(out, &comm)
-	}
-	return out, nil
-}
-
-func (r *sqliteCommissionRepo) ListByBeneficiary(ctx context.Context, tenantID string, BeneficiaryID int64) ([]*models.Commission, error) {
-	query := `
-	SELECT beneficiary_id,
-      SUM(calculated_amount) AS total_owed
-		FROM commissions
-		WHERE tenant_id = ? AND deleted = 0
-		GROUP BY beneficiary_id;
-	`
-	rows, err := r.db.QueryContext(ctx, query, tenantID, BeneficiaryID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var out []*models.Commission
-	for rows.Next() {
-		var comm models.Commission
-		var deletedInt int
-		if err := rows.Scan(
-			&comm.ID,
-			&comm.TenantID,
+			&comm.TransactionType,
+			&comm.TransactionID,
 			&comm.BeneficiaryID,
-			&comm.DueDate,
-			&comm.AmountDue,
-			&comm.AmountPaid,
-			&comm.Status,
-			&comm.LateFee,
-			&comm.PaidDate,
+			&comm.CommissionType,
+			&comm.RateOrAmount,
+			&comm.CalculatedAmount,
+			&comm.Memo,
 			&comm.CreatedBy,
 			&comm.CreatedAt,
 			&comm.ModifiedBy,
@@ -197,93 +161,7 @@ func (r *sqliteCommissionRepo) ListByBeneficiary(ctx context.Context, tenantID s
 		); err != nil {
 			return nil, err
 		}
-		comm.Deleted = deletedInt != 0
-		out = append(out, &comm)
-	}
-	return out, nil
-}
-
-func (r *sqliteCommissionRepo) ListByTransaction(ctx context.Context, tenantID string, TransactionType string) ([]*models.Commission, error) {
-	query := `
-	SELECT transaction_type,
-      COUNT(*)           AS count_records,
-      SUM(calculated_amount) AS sum_amount
-		FROM commissions
-		WHERE tenant_id = ? AND deleted = 0
-		GROUP BY transaction_type;
-	`
-	rows, err := r.db.QueryContext(ctx, query, tenantID, TransactionType)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var out []*models.Commission
-	for rows.Next() {
-		var comm models.Commission
-		var deletedInt int
-		if err := rows.Scan(
-			&comm.ID,
-			&comm.TenantID,
-			&comm.BeneficiaryID,
-			&comm.DueDate,
-			&comm.AmountDue,
-			&comm.AmountPaid,
-			&comm.Status,
-			&comm.LateFee,
-			&comm.PaidDate,
-			&comm.CreatedBy,
-			&comm.CreatedAt,
-			&comm.ModifiedBy,
-			&comm.LastModified,
-			&deletedInt,
-		); err != nil {
-			return nil, err
-		}
-		comm.Deleted = deletedInt != 0
-		out = append(out, &comm)
-	}
-	return out, nil
-}
-
-func (r *sqliteCommissionRepo) ListByMonth(ctx context.Context, tenantID string) ([]*models.Commission, error) {
-	query := `
-	SELECT strftime('%Y-%m', created_at) AS year_month,
-      SUM(calculated_amount) AS month_total
-		FROM commissions
-		WHERE tenant_id = ? AND deleted = 0
-		GROUP BY year_month
-		ORDER BY year_month DESC;
-	`
-	rows, err := r.db.QueryContext(ctx, query, tenantID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var out []*models.Commission
-	for rows.Next() {
-		var comm models.Commission
-		var deletedInt int
-		if err := rows.Scan(
-			&comm.ID,
-			&comm.TenantID,
-			&comm.BeneficiaryID,
-			&comm.DueDate,
-			&comm.AmountDue,
-			&comm.AmountPaid,
-			&comm.Status,
-			&comm.LateFee,
-			&comm.PaidDate,
-			&comm.CreatedBy,
-			&comm.CreatedAt,
-			&comm.ModifiedBy,
-			&comm.LastModified,
-			&deletedInt,
-		); err != nil {
-			return nil, err
-		}
-		comm.Deleted = deletedInt != 0
+		comm.Deleted = (deletedInt != 0)
 		out = append(out, &comm)
 	}
 	return out, nil
@@ -301,20 +179,20 @@ func (r *sqliteCommissionRepo) Update(ctx context.Context, comm *models.Commissi
 	comm.LastModified = now
 
 	query := `
-	UPDATE Commissions
-	SET plan_id = ?, sequence_number = ?, due_date = ?, amount_due = ?, amount_paid = ?, status = ?, late_fee = ?, paid_date = ?,
+	UPDATE commissions
+	SET transaction_type = ?, transaction_id = ?, beneficiary_id = ?,
+	    commission_type = ?, rate_or_amount = ?, calculated_amount = ?, memo = ?,
 	    modified_by = ?, last_modified = ?, deleted = ?
 	WHERE tenant_id = ? AND id = ?;
 	`
 	_, err = r.db.ExecContext(ctx, query,
-		comm.PlanID,
-		comm.SequenceNumber,
-		comm.DueDate,
-		comm.AmountDue,
-		comm.AmountPaid,
-		comm.Status,
-		comm.LateFee,
-		comm.PaidDate,
+		comm.TransactionType,
+		comm.TransactionID,
+		comm.BeneficiaryID,
+		comm.CommissionType,
+		comm.RateOrAmount,
+		comm.CalculatedAmount,
+		comm.Memo,
 		comm.ModifiedBy,
 		comm.LastModified,
 		boolToInt(comm.Deleted),
@@ -333,7 +211,7 @@ func (r *sqliteCommissionRepo) Delete(ctx context.Context, tenantID string, id i
 		return ErrNotFound
 	}
 	query := `
-	UPDATE Commissions
+	UPDATE commissions
 	SET deleted = 1, modified_by = ?, last_modified = ?
 	WHERE tenant_id = ? AND id = ?;
 	`

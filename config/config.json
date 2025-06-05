@@ -4,6 +4,6 @@
   "SMTPPort": 587,
   "SMTPUser": "",
   "SMTPPass": "",
-  "AdminUser": "seller",
+  "AdminUser": "admin",
   "AdminHash": ""
 }
