@@ -230,13 +230,15 @@ func (r *sqliteCommissionRepo) SummarizeByBeneficiary(ctx context.Context, tenan
 	return out, nil
 }
 
-func (r *sqliteCommissionRepo) SummarizeByMonth(ctx context.Context, tenantID string) ([]models.CommissionSummary, error) {
+// SummarizeByMonth returns sum of sale_price per month (YYYY‐MM).
+func (r *sqliteSalesRepo) SummarizeByMonth(ctx context.Context, tenantID string) ([]models.MonthSales, error) {
 	query := `
-        SELECT strftime('%Y-%m', sale_date) AS month, SUM(sale_price) AS total_sales
-			FROM sales
-			WHERE tenant_id = ? AND deleted = 0
-			GROUP BY month
-			ORDER BY month DESC;
+        SELECT strftime('%Y-%m', sale_date) AS month,
+               SUM(sale_price)       AS total_sales
+          FROM sales
+         WHERE tenant_id = ? AND deleted = 0
+         GROUP BY month
+         ORDER BY month DESC;
     `
 	rows, err := r.db.QueryContext(ctx, query, tenantID)
 	if err != nil {
@@ -244,13 +246,13 @@ func (r *sqliteCommissionRepo) SummarizeByMonth(ctx context.Context, tenantID st
 	}
 	defer rows.Close()
 
-	var out []models.CommissionSummary
+	var out []models.MonthSales
 	for rows.Next() {
-		var cs models.CommissionSummary
-		if err := rows.Scan(&cs.BeneficiaryID, &cs.TotalCommission); err != nil {
+		var ms models.MonthSales
+		if err := rows.Scan(&ms.Month, &ms.TotalSales); err != nil {
 			return nil, err
 		}
-		out = append(out, cs)
+		out = append(out, ms)
 	}
 	return out, nil
 }

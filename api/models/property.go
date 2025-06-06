@@ -16,3 +16,8 @@ type Property struct {
 	LastModified time.Time `db:"last_modified" json:"last_modified"`
 	Deleted      bool      `db:"deleted" json:"deleted"`
 }
+
+type PropertyPaymentVolume struct {
+	PropertyID      int64   `json:"property_id"`
+	TotalPaidAmount float64 `json:"total_paid"`
+}

@@ -226,3 +226,31 @@ func (r *sqliteLettingsRepo) Delete(ctx context.Context, lt *models.Lettings) er
 	)
 	return err
 }
+
+// SummarizeRentRoll sums rent_amount for all “currently active” lettings.
+func (r *sqliteLettingsRepo) SummarizeRentRoll(ctx context.Context, tenantID string) ([]models.RentRoll, error) {
+	query := `
+        SELECT property_id, SUM(rent_amount) AS total_rent
+          FROM lettings
+         WHERE tenant_id = ? 
+           AND deleted = 0
+           AND DATE(start_date) <= DATE('now')
+           AND (end_date IS NULL OR DATE(end_date) > DATE('now'))
+         GROUP BY property_id;
+    `
+	rows, err := r.db.QueryContext(ctx, query, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []models.RentRoll
+	for rows.Next() {
+		var rr models.RentRoll
+		if err := rows.Scan(&rr.PropertyID, &rr.TotalRent); err != nil {
+			return nil, err
+		}
+		out = append(out, rr)
+	}
+	return out, nil
+}

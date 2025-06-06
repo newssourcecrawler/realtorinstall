@@ -12,4 +12,11 @@ type SalesRepo interface {
 	ListAll(ctx context.Context, tenantID string) ([]*models.Sales, error)
 	Update(ctx context.Context, b *models.Sales) error // using b.TenantID,b.ID
 	Delete(ctx context.Context, tenantID string, id int64) error
+	SummarizeByMonth(ctx context.Context, tenantID string) ([]models.MonthSales, error)
+}
+
+// MonthSales holds “YYYY‐MM” as Month, plus total sold amount.
+type MonthSales struct {
+	Month      string  `json:"month"`
+	TotalSales float64 `json:"total_sales"`
 }

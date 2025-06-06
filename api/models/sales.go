@@ -17,8 +17,8 @@ type Sales struct {
 	Deleted      bool      `db:"deleted" json:"deleted"`
 }
 
-type MonthlySummary struct {
-	SalesMonth time.Month `json:"sales_month"`
-	SalesYear  int        `json:"sales_year"`
-	TotalSales float64    `json:"total_sales"`
+// MonthSales holds “YYYY‐MM” as Month, plus total sold amount.
+type MonthSales struct {
+	Month      string  `json:"month"`
+	TotalSales float64 `json:"total_sales"`
 }

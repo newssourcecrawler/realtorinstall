@@ -27,30 +27,30 @@ func main() {
 		panic(fmt.Errorf("mkdir data: %w", err))
 	}
 
-	userDB, _        := openDB("data/users.db")
-	commissionDB, _  := openDB("data/commissions.db")
-	propDB, _        := openDB("data/properties.db")
-	pricingDB, _     := openDB("data/pricing.db")
-	buyerDB, _       := openDB("data/buyers.db")
-	planDB, _        := openDB("data/plans.db")
-	instDB, _        := openDB("data/installments.db")
-	payDB, _         := openDB("data/payments.db")
-	salesDB, _       := openDB("data/sales.db")
-	introDB, _       := openDB("data/introductions.db")
-	lettingsDB, _    := openDB("data/lettings.db")
+	userDB, _ := openDB("data/users.db")
+	commissionDB, _ := openDB("data/commissions.db")
+	propDB, _ := openDB("data/properties.db")
+	pricingDB, _ := openDB("data/pricing.db")
+	buyerDB, _ := openDB("data/buyers.db")
+	planDB, _ := openDB("data/plans.db")
+	instDB, _ := openDB("data/installments.db")
+	payDB, _ := openDB("data/payments.db")
+	salesDB, _ := openDB("data/sales.db")
+	introDB, _ := openDB("data/introductions.db")
+	lettingsDB, _ := openDB("data/lettings.db")
 
 	// 2. Initialize repositories (one per domain)
-	userRepo, _       := apiRepos.NewSQLiteUserRepo(userDB)
+	userRepo, _ := apiRepos.NewSQLiteUserRepo(userDB)
 	commissionRepo, _ := apiRepos.NewSQLiteCommissionRepo(commissionDB)
-	propRepo, _       := apiRepos.NewSQLitePropertyRepo(propDB)
-	pricingRepo, _    := apiRepos.NewSQLiteLocationPricingRepo(pricingDB)
-	buyerRepo, _      := apiRepos.NewSQLiteBuyerRepo(buyerDB)
-	planRepo, _       := apiRepos.NewSQLiteInstallmentPlanRepo(planDB)
-	instRepo, _       := apiRepos.NewSQLiteInstallmentRepo(instDB)
-	payRepo, _        := apiRepos.NewSQLitePaymentRepo(payDB)
-	salesRepo, _      := apiRepos.NewSQLiteSalesRepo(salesDB)
-	introRepo, _      := apiRepos.NewSQLiteIntroductionsRepo(introDB)
-	lettingsRepo, _   := apiRepos.NewSQLiteLettingsRepo(lettingsDB)
+	propRepo, _ := apiRepos.NewSQLitePropertyRepo(propDB)
+	pricingRepo, _ := apiRepos.NewSQLiteLocationPricingRepo(pricingDB)
+	buyerRepo, _ := apiRepos.NewSQLiteBuyerRepo(buyerDB)
+	planRepo, _ := apiRepos.NewSQLiteInstallmentPlanRepo(planDB)
+	instRepo, _ := apiRepos.NewSQLiteInstallmentRepo(instDB)
+	payRepo, _ := apiRepos.NewSQLitePaymentRepo(payDB)
+	salesRepo, _ := apiRepos.NewSQLiteSalesRepo(salesDB)
+	introRepo, _ := apiRepos.NewSQLiteIntroductionsRepo(introDB)
+	lettingsRepo, _ := apiRepos.NewSQLiteLettingsRepo(lettingsDB)
 
 	// 3. Construct services
 	jwtSecret := os.Getenv("APP_JWT_SECRET")
@@ -91,10 +91,10 @@ func main() {
 	// 5. Build Gin router with CORS + JWT middleware
 	router := gin.Default()
 	router.Use(cors.Default())
-	router.Use(AuthMiddleware(authSvc, userRepo))
 
 	// 6. Authentication routes
 	router.POST("/login", authH.Login)
+	router.Use(AuthMiddleware(authSvc, userRepo))
 	router.POST("/register",
 		AuthMiddleware(authSvc, userRepo),
 		RequirePermission(userRepo, "register_user"),
@@ -102,17 +102,17 @@ func main() {
 	)
 
 	// 7. User CRUD routes
-	router.GET("/users",AuthMiddleware(authSvc, userRepo),
-	RequirePermission(userRepo, "view_user"),
-	userH.List,
+	router.GET("/users", AuthMiddleware(authSvc, userRepo),
+		RequirePermission(userRepo, "view_user"),
+		userH.List,
 	)
 	router.POST("/users", AuthMiddleware(authSvc, userRepo),
-	RequirePermission(userRepo, "create_user"),
-	userH.Create,
+		RequirePermission(userRepo, "create_user"),
+		userH.Create,
 	)
 	router.PUT("/users/:id", AuthMiddleware(authSvc, userRepo),
-	RequirePermission(userRepo, "update_user"),
-	userH.Update,
+		RequirePermission(userRepo, "update_user"),
+		userH.Update,
 	)
 	router.DELETE("/users/:id",
 		AuthMiddleware(authSvc, userRepo),
@@ -122,8 +122,8 @@ func main() {
 
 	// 8. Property routes
 	router.GET("/properties", AuthMiddleware(authSvc, userRepo),
-	RequirePermission(userRepo, "view_property"),
-	propH.List,
+		RequirePermission(userRepo, "view_property"),
+		propH.List,
 	)
 	router.POST("/properties",
 		AuthMiddleware(authSvc, userRepo),
@@ -142,10 +142,10 @@ func main() {
 	)
 
 	// 9. Buyer routes
-	router.GET("/buyers", 
-	AuthMiddleware(authSvc, userRepo),
-	RequirePermission(userRepo, "view_buyer"),
-	buyerH.List,
+	router.GET("/buyers",
+		AuthMiddleware(authSvc, userRepo),
+		RequirePermission(userRepo, "view_buyer"),
+		buyerH.List,
 	)
 	router.POST("/buyers",
 		AuthMiddleware(authSvc, userRepo),
@@ -165,9 +165,9 @@ func main() {
 
 	// 10. Pricing routes
 	router.GET("/pricing",
-	AuthMiddleware(authSvc, userRepo),
-	RequirePermission(userRepo, "view_pricing"),
-	priceH.List,
+		AuthMiddleware(authSvc, userRepo),
+		RequirePermission(userRepo, "view_pricing"),
+		priceH.List,
 	)
 	router.POST("/pricing",
 		AuthMiddleware(authSvc, userRepo),
@@ -187,8 +187,8 @@ func main() {
 
 	// 11. Sales routes
 	router.GET("/sales", AuthMiddleware(authSvc, userRepo),
-	RequirePermission(userRepo, "view_sale"),
-	salesH.List
+		RequirePermission(userRepo, "view_sale"),
+		salesH.List,
 	)
 	router.POST("/sales",
 		AuthMiddleware(authSvc, userRepo),
@@ -207,10 +207,10 @@ func main() {
 	)
 
 	// 12. Introduction routes
-	router.GET("/introductions", 
-	AuthMiddleware(authSvc, userRepo),
-	RequirePermission(userRepo, "view_introduction"),
-	introH.List,
+	router.GET("/introductions",
+		AuthMiddleware(authSvc, userRepo),
+		RequirePermission(userRepo, "view_introduction"),
+		introH.List,
 	)
 	router.POST("/introductions",
 		AuthMiddleware(authSvc, userRepo),
@@ -229,7 +229,10 @@ func main() {
 	)
 
 	// 13. Lettings routes
-	router.GET("/lettings", lettingsH.List)
+	router.GET("/lettings",
+		RequirePermission(userRepo, "view_lettings"),
+		lettingsH.List
+	)
 	router.POST("/lettings",
 		AuthMiddleware(authSvc, userRepo),
 		RequirePermission(userRepo, "create_sale"),
@@ -247,7 +250,10 @@ func main() {
 	)
 
 	// 14. Plan routes
-	router.GET("/plans", planH.List)
+	router.GET("/plans", 
+		RequirePermission(userRepo, "view_plans"),
+		planH.List
+	)
 	router.POST("/plans",
 		AuthMiddleware(authSvc, userRepo),
 		RequirePermission(userRepo, "create_sale"),
@@ -265,12 +271,12 @@ func main() {
 	)
 
 	// 15. Installment routes
-	router.GET("/installments", 
-	AuthMiddleware(authSvc, userRepo),
-	RequirePermission(userRepo, "view_installments"),
-	instH.List,
+	router.GET("/installments",
+		AuthMiddleware(authSvc, userRepo),
+		RequirePermission(userRepo, "view_installments"),
+		instH.List,
 	)
-	router.GET("/installments/plan/:planId", 
+	router.GET("/installments/plan/:planId",
 		AuthMiddleware(authSvc, userRepo),
 		RequirePermission(userRepo, "view_installments_byplan"),
 		instH.ListByPlan,
@@ -293,8 +299,8 @@ func main() {
 
 	// 16. Payment routes
 	router.GET("/payments", AuthMiddleware(authSvc, userRepo),
-	RequirePermission(userRepo, "view_payments"),
-	payH.List,
+		RequirePermission(userRepo, "view_payments"),
+		payH.List,
 	)
 	router.POST("/payments",
 		AuthMiddleware(authSvc, userRepo),
@@ -314,8 +320,8 @@ func main() {
 
 	// 17. Commission routes
 	router.GET("/commissions", AuthMiddleware(authSvc, userRepo),
-	RequirePermission(userRepo, "view_commission"),
-	commissionH.List
+		RequirePermission(userRepo, "view_commission"),
+		commissionH.List,
 	)
 	router.POST("/commissions",
 		AuthMiddleware(authSvc, userRepo),
@@ -335,9 +341,32 @@ func main() {
 
 	// 18. Reporting routes
 	router.GET("/reports/commissions/beneficiary",
-		AuthMiddleware(authSvc, userRepo),
 		RequirePermission(userRepo, "view_commissions_report"),
 		reportH.CommissionByBeneficiary,
+	)
+
+	router.GET("/reports/installments/outstanding",
+		AuthMiddleware(authSvc, userRepo),
+		RequirePermission(userRepo, "view_installments_report"),
+		reportH.OutstandingInstallmentsByPlan,
+	)
+
+	router.GET("/reports/sales/monthly",
+		AuthMiddleware(authSvc, userRepo),
+		RequirePermission(userRepo, "view_sales_report"),
+		reportH.MonthlySalesVolume,
+	)
+
+	router.GET("/reports/lettings/rentroll",
+		AuthMiddleware(authSvc, userRepo),
+		RequirePermission(userRepo, "view_lettings_report"),
+		reportH.ActiveLettingsRentRoll,
+	)
+
+	router.GET("/reports/properties/top-payments",
+		AuthMiddleware(authSvc, userRepo),
+		RequirePermission(userRepo, "view_property_payments_report"),
+		reportH.TopPropertiesByPaymentVolume,
 	)
 
 	// 19. Start HTTP server with graceful shutdown
@@ -395,7 +424,7 @@ func AuthMiddleware(authSvc *apiServices.AuthService, userRepo apiRepos.UserRepo
 }
 
 // RequirePermission checks that the logged‐in user's role is one of the allowed list.
-func RequirePermission(userRepo, userRepo apiRepos.UserRepo, allowed ...string) gin.HandlerFunc {
+func RequirePermission(userRepo apiRepos.UserRepo, allowed ...string) gin.HandlerFunc {
 	isAllowed := func(role string) bool {
 		for _, r := range allowed {
 			if r == role {

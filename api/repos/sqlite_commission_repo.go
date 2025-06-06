@@ -8,7 +8,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/newssourcecrawler/realtorinstall/api/models"
-	"github.com/newssourcecrawler/realtorinstall/api/repos"
+	//"github.com/newssourcecrawler/realtorinstall/api/repos"
 )
 
 type sqliteCommissionRepo struct {
@@ -209,7 +209,7 @@ func (r *sqliteCommissionRepo) Delete(ctx context.Context, tenantID string, id i
 		return err
 	}
 	if existing.Deleted {
-		return repos.ErrNotFound
+		return ErrNotFound
 	}
 	query := `
 	UPDATE commissions
@@ -225,7 +225,8 @@ func (r *sqliteCommissionRepo) Delete(ctx context.Context, tenantID string, id i
 	return err
 }
 
-func (r *sqliteCommissionRepo) SummarizeByBeneficiary(ctx context.Context, tenantID string) ([]models.CommissionSummary, error) {
+// TotalCommissionByBeneficiary sums all earned commissions per beneficiary.
+func (r *sqliteCommissionRepo) TotalCommissionByBeneficiary(ctx context.Context, tenantID string) ([]models.CommissionSummary, error) {
 	query := `
         SELECT beneficiary_id, SUM(calculated_amount) AS total_commission
           FROM commissions
@@ -249,26 +250,62 @@ func (r *sqliteCommissionRepo) SummarizeByBeneficiary(ctx context.Context, tenan
 	return out, nil
 }
 
-func (r *sqliteCommissionRepo) TotalCommissionByBeneficiary(ctx context.Context, tenantID string) ([]models.CommissionSummary, error) {
+// TotalCommissionByBeneficiary sums all earned commissions per beneficiary.
+func (r *sqliteCommissionRepo) GetCommissionDetailsForBeneficiary(
+	ctx context.Context,
+	tenantID string,
+	beneficiaryID int64,
+) ([]*models.Commission, error) {
+
 	query := `
-        SELECT beneficiary_id, SUM(calculated_amount) AS total_commission
-			FROM commissions
-			WHERE tenant_id = ? AND deleted = 0
-			GROUP BY beneficiary_id;
+        SELECT 
+          id,
+          tenant_id,
+          transaction_type,
+          transaction_id,
+          beneficiary_id,
+          commission_type,
+          rate_or_amount,
+          calculated_amount,
+          memo,
+          created_by,
+          created_at,
+          modified_by,
+          last_modified,
+          deleted
+        FROM commissions
+        WHERE tenant_id = ? 
+          AND beneficiary_id = ? 
+          AND deleted = 0;
     `
-	rows, err := r.db.QueryContext(ctx, query, tenantID)
+	rows, err := r.db.QueryContext(ctx, query, tenantID, beneficiaryID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var out []models.CommissionSummary
+	var out []*models.Commission
 	for rows.Next() {
-		var cs models.CommissionSummary
-		if err := rows.Scan(&cs.BeneficiaryID, &cs.TotalCommission); err != nil {
+		var c models.Commission
+		if err := rows.Scan(
+			&c.ID,
+			&c.TenantID,
+			&c.TransactionType,
+			&c.TransactionID,
+			&c.BeneficiaryID,
+			&c.CommissionType,
+			&c.RateOrAmount,
+			&c.CalculatedAmount,
+			&c.Memo,
+			&c.CreatedBy,
+			&c.CreatedAt,
+			&c.ModifiedBy,
+			&c.LastModified,
+			&c.Deleted,
+		); err != nil {
 			return nil, err
 		}
-		out = append(out, cs)
+		out = append(out, &c)
 	}
-	return out, nil
+	return out, rows.Err()
 }

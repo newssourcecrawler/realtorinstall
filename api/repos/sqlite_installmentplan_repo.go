@@ -269,12 +269,20 @@ func boolToInt(b bool) int {
 	return 0
 }
 
+// PlanSummary holds plan‐ID and total outstanding balance.
+type PlanSummary struct {
+	PlanID           int64   `json:"plan_id"`
+	TotalOutstanding float64 `json:"total_outstanding"`
+}
+
+// SummarizeByPlan computes “amount_due − amount_paid” grouped by each plan.
 func (r *sqliteInstallmentPlanRepo) SummarizeByPlan(ctx context.Context, tenantID string) ([]models.PlanSummary, error) {
 	query := `
-        SELECT id, SUM(amount_due - amount_paid) AS outstanding
-			FROM installments
-			WHERE tenant_id = ? AND deleted = 0
-			GROUP BY id;
+        SELECT plan_id, 
+            SUM(amount_due - amount_paid) AS total_outstanding
+          FROM installments
+         WHERE tenant_id = ? AND deleted = 0
+         GROUP BY plan_id;
     `
 	rows, err := r.db.QueryContext(ctx, query, tenantID)
 	if err != nil {
@@ -284,11 +292,11 @@ func (r *sqliteInstallmentPlanRepo) SummarizeByPlan(ctx context.Context, tenantI
 
 	var out []models.PlanSummary
 	for rows.Next() {
-		var cs models.PlanSummary
-		if err := rows.Scan(&cs.PlanID, &cs.TotalOutstanding); err != nil {
+		var ps models.PlanSummary
+		if err := rows.Scan(&ps.PlanID, &ps.TotalOutstanding); err != nil {
 			return nil, err
 		}
-		out = append(out, cs)
+		out = append(out, ps)
 	}
 	return out, nil
 }

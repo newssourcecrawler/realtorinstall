@@ -22,6 +22,6 @@ type InstallmentPlan struct {
 }
 
 type PlanSummary struct {
-	PlanID            int64   `json:"id"`
-	OutstandingByPlan float64 `json:"total_outstanding"`
+	PlanID           int64   `json:"plan_id"`
+	TotalOutstanding float64 `json:"total_outstanding"`
 }

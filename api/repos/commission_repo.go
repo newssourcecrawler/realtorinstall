@@ -2,7 +2,6 @@ package repos
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
@@ -13,5 +12,6 @@ type CommissionRepo interface {
 	ListAll(ctx context.Context, tenantID string) ([]*models.Commission, error)
 	Update(ctx context.Context, b *models.Commission) error // using b.TenantID,b.ID
 	Delete(ctx context.Context, tenantID string, id int64) error
-	QueryCommissionByBeneficiary(ctx context.Context, tenantID string) (*sql.Rows, error)
+	TotalCommissionByBeneficiary(ctx context.Context, tenantID string) ([]models.CommissionSummary, error)
+	GetCommissionDetailsForBeneficiary(ctx context.Context, tenantID string, beneficiaryID int64) ([]*models.Commission, error)
 }

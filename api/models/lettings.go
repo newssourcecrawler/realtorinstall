@@ -20,3 +20,8 @@ type Lettings struct {
 	LastModified time.Time `db:"last_modified" json:"last_modified"`
 	Deleted      bool      `db:"deleted" json:"deleted"`
 }
+
+type RentRoll struct {
+	PropertyID int64   `json:"property_id"`
+	TotalRent  float64 `json:"total_rent"`
+}

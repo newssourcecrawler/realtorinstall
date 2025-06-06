@@ -189,3 +189,35 @@ func (r *sqlitePropertyRepo) Delete(ctx context.Context, tenantID string, id int
 	)
 	return err
 }
+
+// SummarizeTopProperties sums all payments by joining installments → payments → properties.
+func (r *sqlitePropertyRepo) SummarizeTopProperties(ctx context.Context, tenantID string) ([]models.PropertyPaymentVolume, error) {
+	query := `
+        SELECT p.id            AS property_id,
+               SUM(pay.amount) AS total_paid
+          FROM payments AS pay
+          JOIN installments AS inst ON inst.id = pay.installment_id
+          JOIN properties AS p    ON p.id   = inst.property_id
+         WHERE pay.tenant_id = ? 
+           AND pay.deleted   = 0
+           AND inst.deleted  = 0
+           AND p.deleted     = 0
+         GROUP BY p.id
+         ORDER BY total_paid DESC;
+    `
+	rows, err := r.db.QueryContext(ctx, query, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []models.PropertyPaymentVolume
+	for rows.Next() {
+		var ppv models.PropertyPaymentVolume
+		if err := rows.Scan(&ppv.PropertyID, &ppv.TotalPaidAmount); err != nil {
+			return nil, err
+		}
+		out = append(out, ppv)
+	}
+	return out, nil
+}
