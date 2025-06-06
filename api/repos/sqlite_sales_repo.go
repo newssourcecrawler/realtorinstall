@@ -205,3 +205,52 @@ func (r *sqliteSalesRepo) Delete(ctx context.Context, tenantID string, id int64)
 	)
 	return err
 }
+
+func (r *sqliteCommissionRepo) SummarizeByBeneficiary(ctx context.Context, tenantID string) ([]models.CommissionSummary, error) {
+	query := `
+        SELECT beneficiary_id, SUM(calculated_amount) AS total_commission
+          FROM commissions
+         WHERE tenant_id = ? AND deleted = 0
+         GROUP BY beneficiary_id;
+    `
+	rows, err := r.db.QueryContext(ctx, query, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []models.CommissionSummary
+	for rows.Next() {
+		var cs models.CommissionSummary
+		if err := rows.Scan(&cs.BeneficiaryID, &cs.TotalCommission); err != nil {
+			return nil, err
+		}
+		out = append(out, cs)
+	}
+	return out, nil
+}
+
+func (r *sqliteCommissionRepo) SummarizeByMonth(ctx context.Context, tenantID string) ([]models.CommissionSummary, error) {
+	query := `
+        SELECT strftime('%Y-%m', sale_date) AS month, SUM(sale_price) AS total_sales
+			FROM sales
+			WHERE tenant_id = ? AND deleted = 0
+			GROUP BY month
+			ORDER BY month DESC;
+    `
+	rows, err := r.db.QueryContext(ctx, query, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []models.CommissionSummary
+	for rows.Next() {
+		var cs models.CommissionSummary
+		if err := rows.Scan(&cs.BeneficiaryID, &cs.TotalCommission); err != nil {
+			return nil, err
+		}
+		out = append(out, cs)
+	}
+	return out, nil
+}

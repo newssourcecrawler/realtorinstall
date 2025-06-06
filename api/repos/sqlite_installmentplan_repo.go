@@ -268,3 +268,27 @@ func boolToInt(b bool) int {
 	}
 	return 0
 }
+
+func (r *sqliteInstallmentPlanRepo) SummarizeByPlan(ctx context.Context, tenantID string) ([]models.PlanSummary, error) {
+	query := `
+        SELECT id, SUM(amount_due - amount_paid) AS outstanding
+			FROM installments
+			WHERE tenant_id = ? AND deleted = 0
+			GROUP BY id;
+    `
+	rows, err := r.db.QueryContext(ctx, query, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []models.PlanSummary
+	for rows.Next() {
+		var cs models.PlanSummary
+		if err := rows.Scan(&cs.PlanID, &cs.TotalOutstanding); err != nil {
+			return nil, err
+		}
+		out = append(out, cs)
+	}
+	return out, nil
+}

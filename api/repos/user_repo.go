@@ -18,6 +18,7 @@ type UserRepo interface {
 	// GetByUsername returns a single User by its username (unique per tenant).
 	// Returns ErrNotFound if no such (tenantID, username) record exists or is marked deleted.
 	GetByUsername(ctx context.Context, tenantID, username string) (*models.User, error)
+	ListPermissionsForUser(ctx context.Context, tenantID string, userID int64) ([]string, error)
 
 	// ListAll returns all non‐deleted Users for a given tenant.
 	ListAll(ctx context.Context, tenantID string) ([]*models.User, error)

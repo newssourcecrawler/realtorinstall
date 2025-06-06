@@ -16,3 +16,9 @@ type Sales struct {
 	LastModified time.Time `db:"last_modified" json:"last_modified"`
 	Deleted      bool      `db:"deleted" json:"deleted"`
 }
+
+type MonthlySummary struct {
+	SalesMonth time.Month `json:"sales_month"`
+	SalesYear  int        `json:"sales_year"`
+	TotalSales float64    `json:"total_sales"`
+}

@@ -205,8 +205,8 @@ func (r *sqliteLettingsRepo) Update(ctx context.Context, lt *models.Lettings) er
 	return err
 }
 
-func (r *sqliteLettingsRepo) Delete(ctx context.Context, tenantID string, id int64) error {
-	existing, err := r.GetByID(ctx, tenantID, id)
+func (r *sqliteLettingsRepo) Delete(ctx context.Context, lt *models.Lettings) error {
+	existing, err := r.GetByID(ctx, lt.TenantID, lt.ID)
 	if err != nil {
 		return err
 	}
@@ -219,10 +219,10 @@ func (r *sqliteLettingsRepo) Delete(ctx context.Context, tenantID string, id int
 	WHERE tenant_id = ? AND id = ?;
 	`
 	_, err = r.db.ExecContext(ctx, query,
-		existing.ModifiedBy,
+		lt.ModifiedBy,
 		time.Now().UTC(),
-		tenantID,
-		id,
+		lt.TenantUserID,
+		lt.ID,
 	)
 	return err
 }

@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -11,10 +12,11 @@ import (
 	"github.com/newssourcecrawler/realtorinstall/api/repos"
 )
 
-// JWTClaims defines the custom fields stored in our JWT.
+// JWTClaims holds custom fields plus RegisteredClaims.
 type JWTClaims struct {
-	UserID   int64  `json:"user_id"`
-	TenantID string `json:"tenant_id"`
+	UserID      int64    `json:"user_id"`
+	TenantID    string   `json:"tenant_id"`
+	Permissions []string `json:"perms"`
 	jwt.RegisteredClaims
 }
 
@@ -32,8 +34,7 @@ func NewAuthService(userRepo repos.UserRepo, jwtSecret string, tokenTTL time.Dur
 	}
 }
 
-// Register registers a brand‐new user. It hashes the provided rawPassword before saving.
-// Returns ErrUserAlreadyExists if the username is already taken.
+// Register a new user (bcrypt hash); ErrUserAlreadyExists if username taken.
 func (s *AuthService) Register(
 	ctx context.Context,
 	tenantID string,
@@ -41,23 +42,19 @@ func (s *AuthService) Register(
 	u models.User,
 	rawPassword string,
 ) (int64, error) {
-	// Mandatory fields
 	if u.UserName == "" || u.FirstName == "" || u.LastName == "" || u.Role == "" {
-		return 0, repos.ErrInvalidRegistration
+		return 0, errors.New("missing required fields")
 	}
 
-	// Check if username already exists
 	if existing, _ := s.userRepo.GetByUsername(ctx, tenantID, u.UserName); existing != nil {
 		return 0, repos.ErrUserAlreadyExists
 	}
 
-	// Hash password
-	hashed, err := bcrypt.GenerateFromPassword([]byte(rawPassword), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(rawPassword), bcrypt.DefaultCost)
 	if err != nil {
-		return 0, repos.ErrGenerateFromPassword
+		return 0, err
 	}
-	u.PasswordHash = string(hashed)
-
+	u.PasswordHash = string(hash)
 	now := time.Now().UTC()
 	u.TenantID = tenantID
 	u.CreatedAt = now
@@ -69,7 +66,7 @@ func (s *AuthService) Register(
 	return s.userRepo.Create(ctx, &u)
 }
 
-// Login authenticates a user by username+password, and if successful returns a signed JWT string.
+// Login authenticates username/password, loads permissions, issues JWT.
 func (s *AuthService) Login(
 	ctx context.Context,
 	tenantID string,
@@ -80,17 +77,21 @@ func (s *AuthService) Login(
 	if err != nil {
 		return "", repos.ErrInvalidCredentials
 	}
-
-	// Compare password hashes
 	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)) != nil {
 		return "", repos.ErrInvalidCredentials
 	}
 
-	// Build claims
+	// 1) Load this user’s permissions from userRepo
+	perms, err := s.userRepo.ListPermissionsForUser(ctx, tenantID, user.ID)
+	if err != nil {
+		return "", err
+	}
+
 	now := time.Now().UTC()
 	claims := JWTClaims{
-		UserID:   user.ID,
-		TenantID: user.TenantID,
+		UserID:      user.ID,
+		TenantID:    user.TenantID,
+		Permissions: perms, // e.g. ["create_sale","delete_user","view_commissions"]
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
@@ -103,18 +104,18 @@ func (s *AuthService) Login(
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signed, err := token.SignedString(s.jwtSecret)
 	if err != nil {
-		return "", repos.ErrSignedString
+		return "", err
 	}
 	return signed, nil
 }
 
-// ParseToken validates a JWT string, returns its custom claims if valid, or an error.
+// ParseToken verifies a JWT string and returns its claims.
 func (s *AuthService) ParseToken(tokenStr string) (*JWTClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return s.jwtSecret, nil
 	})
 	if err != nil {
-		return nil, repos.ErrParseWithClaims
+		return nil, err
 	}
 	claims, ok := token.Claims.(*JWTClaims)
 	if !ok || !token.Valid {

@@ -20,3 +20,8 @@ type InstallmentPlan struct {
 	LastModified     time.Time `db:"last_modified" json:"last_modified"`
 	Deleted          bool      `db:"deleted" json:"deleted"`
 }
+
+type PlanSummary struct {
+	PlanID            int64   `json:"id"`
+	OutstandingByPlan float64 `json:"total_outstanding"`
+}

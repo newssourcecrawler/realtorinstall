@@ -3,50 +3,39 @@ package services
 import (
 	"context"
 
+	"github.com/newssourcecrawler/realtorinstall/api/models"
 	"github.com/newssourcecrawler/realtorinstall/api/repos"
 )
 
 type ReportService struct {
-	commissionRepo repos.CommissionRepo
-	salesRepo      repos.SalesRepo
-	pricingRepo    repos.LocationPricingRepo
-	// … add more repos if needed
+	commissionRepo       repos.CommissionRepo
+	installmentsplanRepo repos.InstallmentPlanRepo
+	salesRepo            repos.SalesRepo
+	lettingsRepo         repos.LettingsRepo
+	propertyRepo         repos.PropertyRepo
+	// (drop salesRepo and pricingRepo for now; add back later if you bake in more reports)
 }
 
-func NewReportService(
-	cr repos.CommissionRepo,
-	sr repos.SalesRepo,
-	pr repos.LocationPricingRepo,
-) *ReportService {
-	return &ReportService{
-		commissionRepo: cr,
-		salesRepo:      sr,
-		pricingRepo:    pr,
-	}
+func NewReportService(cr repos.CommissionRepo) *ReportService {
+	return &ReportService{commissionRepo: cr}
 }
 
-// CommissionSummary holds beneficiary + total commission
-type CommissionSummary struct {
-	BeneficiaryID   int64   `json:"beneficiary_id"`
-	TotalCommission float64 `json:"total_commission"`
+func (s *ReportService) CommissionByBeneficiary(ctx context.Context, tenantID string) ([]models.CommissionSummary, error) {
+	return s.commissionRepo.SummarizeByBeneficiary(ctx, tenantID)
 }
 
-func (s *ReportService) CommissionByBeneficiary(ctx context.Context, tenantID string) ([]CommissionSummary, error) {
-	// Directly query the view_commission_by_beneficiary.
-	// Assume your CommissionRepo exposes a RawQuery method (or just grab the *sql.DB).
-	rows, err := s.commissionRepo.QueryCommissionByBeneficiary(ctx, tenantID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
+func (s *ReportService) OutstandingInstallmentsByPlan(ctx context.Context, tenantID string) ([]models.CommissionSummary, error) {
+	return s.installmentsplanRepo.SummarizeByPlan(ctx, tenantID)
+}
 
-	var out []CommissionSummary
-	for rows.Next() {
-		var summary CommissionSummary
-		if err := rows.Scan(&summary.BeneficiaryID, &summary.TotalCommission); err != nil {
-			return nil, err
-		}
-		out = append(out, summary)
-	}
-	return out, nil
+func (s *ReportService) MonthlySalesVolume(ctx context.Context, tenantID string) ([]models.CommissionSummary, error) {
+	return s.salesRepo.SummarizeByMonth(ctx, tenantID)
+}
+
+func (s *ReportService) ActiveLettingsRentRoll(ctx context.Context, tenantID string) ([]models.CommissionSummary, error) {
+	return s.lettingsRepo.SummarizeRentRoll(ctx, tenantID)
+}
+
+func (s *ReportService) TopPropertiesByPaymentVolume(ctx context.Context, tenantID string) ([]models.CommissionSummary, error) {
+	return s.propertyRepo.SummarizeTopProperties(ctx, tenantID)
 }

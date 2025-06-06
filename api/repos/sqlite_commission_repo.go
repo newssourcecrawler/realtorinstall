@@ -8,6 +8,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/newssourcecrawler/realtorinstall/api/models"
+	"github.com/newssourcecrawler/realtorinstall/api/repos"
 )
 
 type sqliteCommissionRepo struct {
@@ -208,7 +209,7 @@ func (r *sqliteCommissionRepo) Delete(ctx context.Context, tenantID string, id i
 		return err
 	}
 	if existing.Deleted {
-		return ErrNotFound
+		return repos.ErrNotFound
 	}
 	query := `
 	UPDATE commissions
@@ -224,13 +225,50 @@ func (r *sqliteCommissionRepo) Delete(ctx context.Context, tenantID string, id i
 	return err
 }
 
-func (r *sqliteCommissionRepo) QueryCommissionByBeneficiary(ctx context.Context, tenantID string) (*sql.Rows, error) {
+func (r *sqliteCommissionRepo) SummarizeByBeneficiary(ctx context.Context, tenantID string) ([]models.CommissionSummary, error) {
 	query := `
-		SELECT beneficiary_id, SUM(calculated_amount) AS total_commission
-      		FROM commissions
-      		WHERE deleted = 0 AND tenant_id = ?
-      		GROUP BY beneficiary_id;  
-			`
-	return r.db.QueryContext(ctx, query, tenantID)
+        SELECT beneficiary_id, SUM(calculated_amount) AS total_commission
+          FROM commissions
+         WHERE tenant_id = ? AND deleted = 0
+         GROUP BY beneficiary_id;
+    `
+	rows, err := r.db.QueryContext(ctx, query, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 
+	var out []models.CommissionSummary
+	for rows.Next() {
+		var cs models.CommissionSummary
+		if err := rows.Scan(&cs.BeneficiaryID, &cs.TotalCommission); err != nil {
+			return nil, err
+		}
+		out = append(out, cs)
+	}
+	return out, nil
+}
+
+func (r *sqliteCommissionRepo) TotalCommissionByBeneficiary(ctx context.Context, tenantID string) ([]models.CommissionSummary, error) {
+	query := `
+        SELECT beneficiary_id, SUM(calculated_amount) AS total_commission
+			FROM commissions
+			WHERE tenant_id = ? AND deleted = 0
+			GROUP BY beneficiary_id;
+    `
+	rows, err := r.db.QueryContext(ctx, query, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []models.CommissionSummary
+	for rows.Next() {
+		var cs models.CommissionSummary
+		if err := rows.Scan(&cs.BeneficiaryID, &cs.TotalCommission); err != nil {
+			return nil, err
+		}
+		out = append(out, cs)
+	}
+	return out, nil
 }

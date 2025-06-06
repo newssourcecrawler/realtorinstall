@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"os"
@@ -9,12 +10,15 @@ import (
 	"strings"
 	"time"
 
+	_ "github.com/mattn/go-sqlite3"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
 	"github.com/newssourcecrawler/realtorinstall/api/handlers"
 	apiRepos "github.com/newssourcecrawler/realtorinstall/api/repos"
 	apiServices "github.com/newssourcecrawler/realtorinstall/api/services"
+	"github.com/newssourcecrawler/realtorinstall/dbmigrations"
 )
 
 func main() {
@@ -23,19 +27,30 @@ func main() {
 		panic(fmt.Errorf("mkdir data: %w", err))
 	}
 
-	// 2. Initialize repositories (one per domain)
-	propRepo, _ := apiRepos.NewSQLitePropertyRepo("data/properties.db")
-	pricingRepo, _ := apiRepos.NewSQLiteLocationPricingRepo("data/pricing.db")
-	buyerRepo, _ := apiRepos.NewSQLiteBuyerRepo("data/buyers.db")
-	userRepo, _ := apiRepos.NewSQLiteUserRepo("data/users.db")
-	planRepo, _ := apiRepos.NewSQLiteInstallmentPlanRepo("data/plans.db")
-	instRepo, _ := apiRepos.NewSQLiteInstallmentRepo("data/installments.db")
-	payRepo, _ := apiRepos.NewSQLitePaymentRepo("data/payments.db")
+	userDB, _        := openDB("data/users.db")
+	commissionDB, _  := openDB("data/commissions.db")
+	propDB, _        := openDB("data/properties.db")
+	pricingDB, _     := openDB("data/pricing.db")
+	buyerDB, _       := openDB("data/buyers.db")
+	planDB, _        := openDB("data/plans.db")
+	instDB, _        := openDB("data/installments.db")
+	payDB, _         := openDB("data/payments.db")
+	salesDB, _       := openDB("data/sales.db")
+	introDB, _       := openDB("data/introductions.db")
+	lettingsDB, _    := openDB("data/lettings.db")
 
-	salesRepo, _ := apiRepos.NewSQLiteSalesRepo("data/sales.db")
-	introRepo, _ := apiRepos.NewSQLiteIntroductionsRepo("data/introductions.db")
-	lettingsRepo, _ := apiRepos.NewSQLiteLettingsRepo("data/lettings.db")
-	commissionRepo, _ := apiRepos.NewSQLiteCommissionRepo("data/commissions.db")
+	// 2. Initialize repositories (one per domain)
+	userRepo, _       := apiRepos.NewSQLiteUserRepo(userDB)
+	commissionRepo, _ := apiRepos.NewSQLiteCommissionRepo(commissionDB)
+	propRepo, _       := apiRepos.NewSQLitePropertyRepo(propDB)
+	pricingRepo, _    := apiRepos.NewSQLiteLocationPricingRepo(pricingDB)
+	buyerRepo, _      := apiRepos.NewSQLiteBuyerRepo(buyerDB)
+	planRepo, _       := apiRepos.NewSQLiteInstallmentPlanRepo(planDB)
+	instRepo, _       := apiRepos.NewSQLiteInstallmentRepo(instDB)
+	payRepo, _        := apiRepos.NewSQLitePaymentRepo(payDB)
+	salesRepo, _      := apiRepos.NewSQLiteSalesRepo(salesDB)
+	introRepo, _      := apiRepos.NewSQLiteIntroductionsRepo(introDB)
+	lettingsRepo, _   := apiRepos.NewSQLiteLettingsRepo(lettingsDB)
 
 	// 3. Construct services
 	jwtSecret := os.Getenv("APP_JWT_SECRET")
@@ -56,12 +71,7 @@ func main() {
 	lettingsSvc := apiServices.NewLettingsService(lettingsRepo)
 	commissionSvc := apiServices.NewCommissionService(commissionRepo, salesRepo, lettingsRepo, introRepo, userRepo)
 
-	reportSvc := apiServices.NewReportService(
-		commissionRepo,
-		salesRepo,
-		pricingRepo,
-		// add other repos if needed
-	)
+	reportSvc := apiServices.NewReportService(commissionRepo)
 
 	// 4. Instantiate handlers
 	authH := handlers.NewAuthHandler(authSvc)
@@ -87,107 +97,134 @@ func main() {
 	router.POST("/login", authH.Login)
 	router.POST("/register",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "register_user"),
 		authH.Register,
 	)
 
 	// 7. User CRUD routes
-	router.GET("/users", userH.List)
-	router.POST("/users", userH.Create)
-	router.PUT("/users/:id", userH.Update)
+	router.GET("/users",AuthMiddleware(authSvc, userRepo),
+	RequirePermission(userRepo, "view_user"),
+	userH.List,
+	)
+	router.POST("/users", AuthMiddleware(authSvc, userRepo),
+	RequirePermission(userRepo, "create_user"),
+	userH.Create,
+	)
+	router.PUT("/users/:id", AuthMiddleware(authSvc, userRepo),
+	RequirePermission(userRepo, "update_user"),
+	userH.Update,
+	)
 	router.DELETE("/users/:id",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "delete_user"),
 		userH.Delete,
 	)
 
 	// 8. Property routes
-	router.GET("/properties", propH.List)
+	router.GET("/properties", AuthMiddleware(authSvc, userRepo),
+	RequirePermission(userRepo, "view_property"),
+	propH.List,
+	)
 	router.POST("/properties",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "create_property"),
 		propH.Create,
 	)
 	router.PUT("/properties/:id",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "update_property"),
 		propH.Update,
 	)
 	router.DELETE("/properties/:id",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "delete_property"),
 		propH.Delete,
 	)
 
 	// 9. Buyer routes
-	router.GET("/buyers", buyerH.List)
+	router.GET("/buyers", 
+	AuthMiddleware(authSvc, userRepo),
+	RequirePermission(userRepo, "view_buyer"),
+	buyerH.List,
+	)
 	router.POST("/buyers",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "create_buyer"),
 		buyerH.Create,
 	)
 	router.PUT("/buyers/:id",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "update_buyer"),
 		buyerH.Update,
 	)
 	router.DELETE("/buyers/:id",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "delete_buyer"),
 		buyerH.Delete,
 	)
 
 	// 10. Pricing routes
-	router.GET("/pricing", priceH.List)
+	router.GET("/pricing",
+	AuthMiddleware(authSvc, userRepo),
+	RequirePermission(userRepo, "view_pricing"),
+	priceH.List,
+	)
 	router.POST("/pricing",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "create_pricing"),
 		priceH.Create,
 	)
 	router.PUT("/pricing/:id",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "update_pricing"),
 		priceH.Update,
 	)
 	router.DELETE("/pricing/:id",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "delete_pricing"),
 		priceH.Delete,
 	)
 
 	// 11. Sales routes
-	router.GET("/sales", salesH.List)
+	router.GET("/sales", AuthMiddleware(authSvc, userRepo),
+	RequirePermission(userRepo, "view_sale"),
+	salesH.List
+	)
 	router.POST("/sales",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "create_sale"),
 		salesH.Create,
 	)
 	router.PUT("/sales/:id",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "update_sale"),
 		salesH.Update,
 	)
 	router.DELETE("/sales/:id",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "delete_sale"),
 		salesH.Delete,
 	)
 
 	// 12. Introduction routes
-	router.GET("/introductions", introH.List)
+	router.GET("/introductions", 
+	AuthMiddleware(authSvc, userRepo),
+	RequirePermission(userRepo, "view_introduction"),
+	introH.List,
+	)
 	router.POST("/introductions",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "create_introduction"),
 		introH.Create,
 	)
 	router.PUT("/introductions/:id",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "create_introduction"),
 		introH.Update,
 	)
 	router.DELETE("/introductions/:id",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "delete_introduction"),
 		introH.Delete,
 	)
 
@@ -195,17 +232,17 @@ func main() {
 	router.GET("/lettings", lettingsH.List)
 	router.POST("/lettings",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "create_sale"),
 		lettingsH.Create,
 	)
 	router.PUT("/lettings/:id",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "create_sale"),
 		lettingsH.Update,
 	)
 	router.DELETE("/lettings/:id",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "create_sale"),
 		lettingsH.Delete,
 	)
 
@@ -213,77 +250,95 @@ func main() {
 	router.GET("/plans", planH.List)
 	router.POST("/plans",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "create_sale"),
 		planH.Create,
 	)
 	router.PUT("/plans/:id",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "create_sale"),
 		planH.Update,
 	)
 	router.DELETE("/plans/:id",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "create_sale"),
 		planH.Delete,
 	)
 
 	// 15. Installment routes
-	router.GET("/installments", instH.List)
-	router.GET("/installments/plan/:planId", instH.ListByPlan)
+	router.GET("/installments", 
+	AuthMiddleware(authSvc, userRepo),
+	RequirePermission(userRepo, "view_installments"),
+	instH.List,
+	)
+	router.GET("/installments/plan/:planId", 
+		AuthMiddleware(authSvc, userRepo),
+		RequirePermission(userRepo, "view_installments_byplan"),
+		instH.ListByPlan,
+	)
 	router.POST("/installments",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "create_installments"),
 		instH.Create,
 	)
 	router.PUT("/installments/:id",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "update_installments"),
 		instH.Update,
 	)
 	router.DELETE("/installments/:id",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "delete_installments"),
 		instH.Delete,
 	)
 
 	// 16. Payment routes
-	router.GET("/payments", payH.List)
+	router.GET("/payments", AuthMiddleware(authSvc, userRepo),
+	RequirePermission(userRepo, "view_payments"),
+	payH.List,
+	)
 	router.POST("/payments",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "create_payments"),
 		payH.Create,
 	)
 	router.PUT("/payments/:id",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "update_payments"),
 		payH.Update,
 	)
 	router.DELETE("/payments/:id",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "delete_payments"),
 		payH.Delete,
 	)
 
 	// 17. Commission routes
-	router.GET("/commissions", commissionH.List)
+	router.GET("/commissions", AuthMiddleware(authSvc, userRepo),
+	RequirePermission(userRepo, "view_commission"),
+	commissionH.List
+	)
 	router.POST("/commissions",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "create_commission"),
 		commissionH.Create,
 	)
 	router.PUT("/commissions/:id",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "update_commission"),
 		commissionH.Update,
 	)
 	router.DELETE("/commissions/:id",
 		AuthMiddleware(authSvc, userRepo),
-		AuthorizeRoles(userRepo, "admin", "manager"),
+		RequirePermission(userRepo, "delete_commission"),
 		commissionH.Delete,
 	)
 
 	// 18. Reporting routes
-	router.GET("/reports/commissions/beneficiary", reportH.CommissionsByBeneficiary)
+	router.GET("/reports/commissions/beneficiary",
+		AuthMiddleware(authSvc, userRepo),
+		RequirePermission(userRepo, "view_commissions_report"),
+		reportH.CommissionByBeneficiary,
+	)
 
 	// 19. Start HTTP server with graceful shutdown
 	srv := &http.Server{
@@ -334,12 +389,13 @@ func AuthMiddleware(authSvc *apiServices.AuthService, userRepo apiRepos.UserRepo
 
 		c.Set("currentUser", claims.UserID)
 		c.Set("currentTenant", claims.TenantID)
+		c.Set("perms", claims.Permissions)
 		c.Next()
 	}
 }
 
-// AuthorizeRoles checks that the logged‐in user's role is one of the allowed list.
-func AuthorizeRoles(userRepo apiRepos.UserRepo, allowed ...string) gin.HandlerFunc {
+// RequirePermission checks that the logged‐in user's role is one of the allowed list.
+func RequirePermission(userRepo, userRepo apiRepos.UserRepo, allowed ...string) gin.HandlerFunc {
 	isAllowed := func(role string) bool {
 		for _, r := range allowed {
 			if r == role {
@@ -359,4 +415,15 @@ func AuthorizeRoles(userRepo apiRepos.UserRepo, allowed ...string) gin.HandlerFu
 		}
 		c.Next()
 	}
+}
+
+func openDB(path string) (*sql.DB, error) {
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		return nil, err
+	}
+	if err := dbmigrations.ApplyMigrations(db); err != nil {
+		return nil, err
+	}
+	return db, nil
 }

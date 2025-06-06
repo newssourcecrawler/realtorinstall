@@ -255,3 +255,29 @@ func (r *sqliteUserRepo) Delete(ctx context.Context, tenantID string, id int64) 
 	)
 	return err
 }
+
+func (r *sqliteUserRepo) ListPermissionsForUser(ctx context.Context, tenantID string, userID int64) ([]string, error) {
+	query := `
+        SELECT p.name
+          FROM permissions AS p
+          JOIN role_permissions AS rp ON rp.permission_id = p.id
+          JOIN user_roles AS ur ON ur.role_id = rp.role_id
+          JOIN users AS u ON u.id = ur.user_id
+         WHERE u.id = ? AND u.tenant_id = ? AND u.deleted = 0;
+    `
+	rows, err := r.db.QueryContext(ctx, query, userID, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var perms []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		perms = append(perms, name)
+	}
+	return perms, nil
+}

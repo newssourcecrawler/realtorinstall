@@ -18,3 +18,8 @@ type Commission struct {
 	LastModified     time.Time `db:"last_modified" json:"last_modified"`
 	Deleted          bool      `db:"deleted" json:"deleted"`
 }
+
+type CommissionSummary struct {
+	BeneficiaryID   int64   `json:"beneficiary_id"`
+	TotalCommission float64 `json:"total_commission"`
+}

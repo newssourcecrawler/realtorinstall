@@ -11,5 +11,6 @@ type LettingsRepo interface {
 	GetByID(ctx context.Context, tenantID string, id int64) (*models.Lettings, error)
 	ListAll(ctx context.Context, tenantID string) ([]*models.Lettings, error)
 	Update(ctx context.Context, b *models.Lettings) error // using b.TenantID,b.ID
-	Delete(ctx context.Context, tenantID string, id int64) error
+	//Delete(ctx context.Context, tenantID string, id int64) error
+	Delete(ctx context.Context, b *models.Lettings) error
 }
