@@ -269,12 +269,6 @@ func boolToInt(b bool) int {
 	return 0
 }
 
-// PlanSummary holds plan‐ID and total outstanding balance.
-type PlanSummary struct {
-	PlanID           int64   `json:"plan_id"`
-	TotalOutstanding float64 `json:"total_outstanding"`
-}
-
 // SummarizeByPlan computes “amount_due − amount_paid” grouped by each plan.
 func (r *sqliteInstallmentPlanRepo) SummarizeByPlan(ctx context.Context, tenantID string) ([]models.PlanSummary, error) {
 	query := `

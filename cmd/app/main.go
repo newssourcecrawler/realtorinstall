@@ -52,6 +52,17 @@ var (
 	apiURL = "http://localhost:8080"
 )
 
+caCert, _ := os.ReadFile("path/to/server.crt")
+pool := x509.NewCertPool()
+pool.AppendCertsFromPEM(caCert)
+httpClient := &http.Client{
+  Transport: &http.Transport{
+    TLSClientConfig: &tls.Config{
+      RootCAs: pool,
+    },
+  },
+}
+
 func main() {
 	myApp := app.New()
 	myWin := myApp.NewWindow("Realtor Installment Assistant")
