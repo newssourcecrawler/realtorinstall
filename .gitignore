@@ -1,15 +1,3 @@
-# Node modules
-/frontend/node_modules/
-
-# SQLite database and backups
-/data/
-/frontend/wailsjs/go/
-/frontend/wailsjs/
-
-# Wails build artifacts (if any)
-/frontend/build/
-/build/
-
 # macOS metadata
 .DS_Store
 
@@ -17,11 +5,41 @@
 .vscode/
 .idea/
 
-# Compiled Go binaries
+# macOS
+.DS_Store
+Icon?
+__MACOSX/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# Go
+bin/
+pkg/
 *.exe
-*.dll
-*.so
-*.dylib
+*.test
+
+# Wails / Frontend
+/frontend/node_modules/
+/frontend/dist/
+/frontend/build/
+/wailsjs/
+npm-debug.log
+yarn-error.log
+
+# SQLite DBs
+*.db
+data/*.db
+
+# License keys & outputs
+.config/realtor_install/keys/
+~/Licenses/
+
+# Python
+__pycache__/
+*.py[cod]
 
 # Logs
 *.log
