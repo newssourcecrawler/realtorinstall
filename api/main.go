@@ -2,21 +2,22 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
+	"encoding/csv"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"time"
-	"encoding/csv"
-	"io"
 
 	_ "github.com/mattn/go-sqlite3"
 
+	"github.com/360EntSecGroup-Skylar/excelize"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/360EntSecGroup-Skylar/excelize"
 
 	"github.com/newssourcecrawler/realtorinstall/api/handlers"
 	apiRepos "github.com/newssourcecrawler/realtorinstall/api/repos"
@@ -234,7 +235,7 @@ func main() {
 	// 13. Lettings routes
 	router.GET("/lettings",
 		RequirePermission(userRepo, "view_lettings"),
-		lettingsH.List
+		lettingsH.List,
 	)
 	router.POST("/lettings",
 		AuthMiddleware(authSvc, userRepo),
@@ -253,9 +254,9 @@ func main() {
 	)
 
 	// 14. Plan routes
-	router.GET("/plans", 
+	router.GET("/plans",
 		RequirePermission(userRepo, "view_plans"),
-		planH.List
+		planH.List,
 	)
 	router.POST("/plans",
 		AuthMiddleware(authSvc, userRepo),
@@ -345,7 +346,7 @@ func main() {
 	// 18. Reporting routes
 	router.GET("/reports/commissions/beneficiary",
 		RequirePermission(userRepo, "view_commissions_report"),
-		reportH.CommissionByBeneficiary,
+		reportH.TotalCommissionByBeneficiary,
 	)
 
 	router.GET("/reports/installments/outstanding",
@@ -378,13 +379,13 @@ func main() {
 
 	// 19. Start HTTP server with graceful shutdown
 	srv := &http.Server{
-		Addr:    ":8443",
-		Handler: router,
+		Addr:      ":8443",
+		Handler:   router,
 		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12},
-	  }
-	  go func() {
+	}
+	go func() {
 		fmt.Println("API listening on https://localhost:8443")
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := srv.ListenAndServeTLS("certs/server.crt", "certs/server.key"); err != nil && err != http.ErrServerClosed {
 			fmt.Fprintf(os.Stderr, "Listen error: %v\n", err)
 			os.Exit(1)
 		}
@@ -466,92 +467,94 @@ func openDB(path string) (*sql.DB, error) {
 }
 
 func ExportPropertiesCSV(db *sql.DB) http.HandlerFunc {
-    return func(w http.ResponseWriter, r *http.Request) {
-        rows, err := db.Query(`SELECT id, address, base_price_usd FROM properties WHERE deleted=0`)
-        if err != nil {
-            http.Error(w, err.Error(), 500)
-            return
-        }
-        defer rows.Close()
+	return func(w http.ResponseWriter, r *http.Request) {
+		rows, err := db.Query(`SELECT id, address, base_price_usd FROM properties WHERE deleted=0`)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		defer rows.Close()
 
-        w.Header().Set("Content-Disposition", "attachment;filename=properties.csv")
-        w.Header().Set("Content-Type", "text/csv")
-        writer := csv.NewWriter(w)
-        defer writer.Flush()
+		w.Header().Set("Content-Disposition", "attachment;filename=properties.csv")
+		w.Header().Set("Content-Type", "text/csv")
+		writer := csv.NewWriter(w)
+		defer writer.Flush()
 
-        // Header
-        writer.Write([]string{"ID", "Address", "BasePriceUSD"})
+		// Header
+		writer.Write([]string{"ID", "Address", "BasePriceUSD"})
 
-        for rows.Next() {
-            var id int64
-            var addr string
-            var price float64
-            rows.Scan(&id, &addr, &price)
-            writer.Write([]string{
-                fmt.Sprint(id),
-                addr,
-                fmt.Sprintf("%.2f", price),
-            })
-        }
-    }
+		for rows.Next() {
+			var id int64
+			var addr string
+			var price float64
+			rows.Scan(&id, &addr, &price)
+			writer.Write([]string{
+				fmt.Sprint(id),
+				addr,
+				fmt.Sprintf("%.2f", price),
+			})
+		}
+	}
 }
 
 func ImportPropertiesCSV(db *sql.DB) http.HandlerFunc {
-    return func(w http.ResponseWriter, r *http.Request) {
-        file, _, err := r.FormFile("file")
-        if err != nil {
-            http.Error(w, err.Error(), 400)
-            return
-        }
-        defer file.Close()
-        reader := csv.NewReader(file)
-        // Skip header
-        if _, err := reader.Read(); err != nil {
-            http.Error(w, err.Error(), 400)
-            return
-        }
-        tx, _ := db.Begin()
-        stmt, _ := tx.Prepare(`INSERT INTO properties(address, base_price_usd) VALUES(?,?)`)
-        defer stmt.Close()
+	return func(w http.ResponseWriter, r *http.Request) {
+		file, _, err := r.FormFile("file")
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		defer file.Close()
+		reader := csv.NewReader(file)
+		// Skip header
+		if _, err := reader.Read(); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		tx, _ := db.Begin()
+		stmt, _ := tx.Prepare(`INSERT INTO properties(address, base_price_usd) VALUES(?,?)`)
+		defer stmt.Close()
 
-        for {
-            record, err := reader.Read()
-            if err == io.EOF {
-                break
-            }
-            if err != nil {
-                tx.Rollback()
-                http.Error(w, err.Error(), 400)
-                return
-            }
-            stmt.Exec(record[1], record[2])
-        }
-        tx.Commit()
-        w.WriteHeader(http.StatusCreated)
-    }
+		for {
+			record, err := reader.Read()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				tx.Rollback()
+				http.Error(w, err.Error(), 400)
+				return
+			}
+			stmt.Exec(record[1], record[2])
+		}
+		tx.Commit()
+		w.WriteHeader(http.StatusCreated)
+	}
 }
 
 func ExportPropertiesXLSX(db *sql.DB) http.HandlerFunc {
-    return func(w http.ResponseWriter, r *http.Request) {
-        f := excelize.NewFile()
-        rows, _ := db.Query(`SELECT id, address, base_price_usd FROM properties WHERE deleted=0`)
-        defer rows.Close()
-        sheet := "Properties"
-        f.SetSheetName("Sheet1", sheet)
-        f.SetCellValue(sheet, "A1", "ID")
-        f.SetCellValue(sheet, "B1", "Address")
-        f.SetCellValue(sheet, "C1", "BasePriceUSD")
-        rowNum := 2
-        for rows.Next() {
-            var id int64; var addr string; var price float64
-            rows.Scan(&id, &addr, &price)
-            f.SetCellValue(sheet, fmt.Sprintf("A%d", rowNum), id)
-            f.SetCellValue(sheet, fmt.Sprintf("B%d", rowNum), addr)
-            f.SetCellValue(sheet, fmt.Sprintf("C%d", rowNum), price)
-            rowNum++
-        }
-        w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        w.Header().Set("Content-Disposition", "attachment; filename=properties.xlsx")
-        f.Write(w)
-    }
+	return func(w http.ResponseWriter, r *http.Request) {
+		f := excelize.NewFile()
+		rows, _ := db.Query(`SELECT id, address, base_price_usd FROM properties WHERE deleted=0`)
+		defer rows.Close()
+		sheet := "Properties"
+		f.SetSheetName("Sheet1", sheet)
+		f.SetCellValue(sheet, "A1", "ID")
+		f.SetCellValue(sheet, "B1", "Address")
+		f.SetCellValue(sheet, "C1", "BasePriceUSD")
+		rowNum := 2
+		for rows.Next() {
+			var id int64
+			var addr string
+			var price float64
+			rows.Scan(&id, &addr, &price)
+			f.SetCellValue(sheet, fmt.Sprintf("A%d", rowNum), id)
+			f.SetCellValue(sheet, fmt.Sprintf("B%d", rowNum), addr)
+			f.SetCellValue(sheet, fmt.Sprintf("C%d", rowNum), price)
+			rowNum++
+		}
+		w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+		w.Header().Set("Content-Disposition", "attachment; filename=properties.xlsx")
+		f.Write(w)
+	}
 }
