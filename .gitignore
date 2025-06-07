@@ -36,6 +36,7 @@ data/*.db
 # License keys & outputs
 .config/realtor_install/keys/
 ~/Licenses/
+scripts/
 
 # Python
 __pycache__/

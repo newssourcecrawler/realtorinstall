@@ -6,6 +6,7 @@ toolchain go1.24.3
 
 require (
 	fyne.io/fyne/v2 v2.3.5
+	github.com/360EntSecGroup-Skylar/excelize v1.4.1
 	github.com/gin-contrib/cors v1.3.1
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/mattn/go-sqlite3 v1.14.16
@@ -38,6 +39,7 @@ require (
 	github.com/leodido/go-urn v1.2.1 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421 // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
+	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.6 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/srwiley/oksvg v0.0.0-20220731023508-a61f04f16b76 // indirect
