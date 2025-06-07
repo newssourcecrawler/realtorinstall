@@ -1,5 +1,5 @@
 // client/client.go
-package client
+package client_main
 
 import (
 	"crypto/tls"
