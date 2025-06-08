@@ -130,7 +130,7 @@ func showMain(a fyne.App) {
 		container.NewTabItem("Commissions", ui.CommissionTab()),
 		container.NewTabItem("Sales", ui.SalesTab()),
 		container.NewTabItem("Lettings", ui.LettingsTab()),
-		container.NewTabItem("Reports", ui.ReportTab()),
+		container.NewTabItem("Reports", ui.ReportTab(w)),
 	)
 	tabs.SetTabLocation(container.TabLocationTop)
 
