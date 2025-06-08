@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -18,6 +17,7 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
+
 	"github.com/newssourcecrawler/realtorinstall/cmd/app/client"
 	"github.com/newssourcecrawler/realtorinstall/cmd/app/ui"
 )
@@ -26,43 +26,12 @@ import (
 var selectedPropID int64
 var selectedBuyerID int64
 
-// Property mirrors internal/models.Property + API JSON.
-type Property struct {
-	ID           int64  `json:"id"`
-	Address      string `json:"address"`
-	City         string `json:"city"`
-	ZIP          string `json:"zip"`
-	ListingDate  string `json:"listing_date"`
-	CreatedAt    string `json:"created_at"`
-	LastModified string `json:"last_modified"`
-}
-
-// Buyer mirrors internal/models.Buyer + API JSON. Adjust fields to match your internal model.
-type Buyer struct {
-	ID    int64  `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
-}
-
-var (
-	// For Properties tab
-	properties []Property
-	propList   *widget.List
-
-	// For Buyers tab
-	buyers    []Buyer
-	buyerList *widget.List
-
-	// Base URL of your API
-	apiURL = "http://localhost:8080"
-)
-
 func main() {
 
 	// 1) Load & trust your server’s cert
 	certPool := x509.NewCertPool()
 	crtPath := "certs/server.crt"
-	pem, err := ioutil.ReadFile(crtPath)
+	pem, err := os.ReadFile(crtPath)
 	if err != nil {
 		log.Fatalf("Failed to read CA cert %s: %v", crtPath, err)
 	}
@@ -77,8 +46,9 @@ func main() {
 	})
 
 	// 3) Start Fyne
-	myApp := app.New()
-	myWin := myApp.NewWindow("Realtor Installment Assistant")
+	myApp := app.NewWithID("com.newssourcecrawler.realtorinstall")
+	myWin := myApp.NewWindow("Realtor Sales, Lettings and Installment Suite")
+	myApp.Settings().SetTheme(&ui.CustomTheme{})
 	showLogin(myApp)
 
 	// Graceful shutdown on Ctrl+C
@@ -136,7 +106,7 @@ func showLogin(a fyne.App) {
 	})
 
 	w.SetContent(container.NewVBox(
-		widget.NewLabelWithStyle("Realtor Installment", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
+		widget.NewLabelWithStyle("Realtor Sales, Lettings and Installment Suite", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
 		username,
 		password,
 		loginBtn,
@@ -147,10 +117,11 @@ func showLogin(a fyne.App) {
 
 // showMain builds your tabbed main UI after login.
 func showMain(a fyne.App) {
-	w := a.NewWindow("Realtor Installment Assistant")
+	w := a.NewWindow("Realtor Sales, Lettings and Installment Suite")
 	w.Resize(fyne.NewSize(1024, 768))
 
 	tabs := container.NewAppTabs(
+		container.NewTabItem("Settings", ui.SettingsTab(w)),
 		container.NewTabItem("Properties", ui.PropertyTab()),
 		container.NewTabItem("Buyers", ui.BuyerTab()),
 		container.NewTabItem("Plans", ui.PlanTab()),
@@ -169,7 +140,7 @@ func showMain(a fyne.App) {
 
 // loadProperties calls GET /properties and updates propList.
 func loadProperties(win fyne.Window) {
-	resp, err := http.Get(apiURL + "/properties")
+	resp, err := http.Get(BaseURL + "/properties")
 	if err != nil {
 		showError(win, fmt.Sprintf("Failed to GET properties: %v", err))
 		return
@@ -191,7 +162,7 @@ func loadProperties(win fyne.Window) {
 
 // loadBuyers calls GET /buyers and updates buyerList.
 func loadBuyers(win fyne.Window) {
-	resp, err := http.Get(apiURL + "/buyers")
+	resp, err := http.Get(BaseURL + "/buyers")
 	if err != nil {
 		showError(win, fmt.Sprintf("Failed to GET buyers: %v", err))
 		return
