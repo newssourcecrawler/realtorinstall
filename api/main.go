@@ -25,6 +25,7 @@ import (
 	apiRepos "github.com/newssourcecrawler/realtorinstall/api/repos"
 	apiServices "github.com/newssourcecrawler/realtorinstall/api/services"
 	"github.com/newssourcecrawler/realtorinstall/dbmigrations"
+	"github.com/newssourcecrawler/realtorinstall/internal/config"
 	"github.com/newssourcecrawler/realtorinstall/migrate"
 	"github.com/your-org/realtorinstall/api/internal/db"
 )
@@ -55,22 +56,90 @@ func main() {
 		lettingsDB, _ := openDB("data/lettings.db")
 	*/
 
-	cfg := db.LoadConfigPrefix("APP_") // or just LoadConfig()
-	conn, err := db.Open(cfg)
+	// 0. Load config
+	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("db.Open: %v", err)
+		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	if cfg.Driver == "sqlite" {
+	//cfg := db.LoadConfigPrefix("APP_") // or just LoadConfig()
+	//conn, err := db.Open(cfg)
+	//if err != nil {
+	//	log.Fatalf("db.Open: %v", err)
+	//}
+
+	// 1. Open per-domain DBs
+	userDB, err := db.Open(db.Config{Driver: cfg.UserDBDriver, DSN: cfg.UserDBDSN})
+	salesDB, err := db.Open(db.Config{Driver: cfg.SalesDBDriver, DSN: cfg.SalesDBDSN})
+	commissionDB, err := db.Open(db.Config{Driver: cfg.CommissionDBDriver, DSN: cfg.CommissionDBDSN})
+	propDB, err := db.Open(db.Config{Driver: cfg.PropertyDBDriver, DSN: cfg.PropertyDBDSN})
+	pricingDB, err := db.Open(db.Config{Driver: cfg.PricingDBDriver, DSN: cfg.PricingDBDSN})
+	buyerDB, err := db.Open(db.Config{Driver: cfg./BuyerDBDriver, DSN: cfg.BuyerDBDSN})
+	planDB, err := db.Open(db.Config{Driver: cfg.PlanDBDriver, DSN: cfg.PlanDBDSN})
+	instDB, err := db.Open(db.Config{Driver: cfg.InstDBDriver, DSN: cfg.InstDBDSN})
+	payDB, err := db.Open(db.Config{Driver: cfg.PayDBDriver, DSN: cfg.PayDBDSN})
+	introDB, err := db.Open(db.Config{Driver: cfg.IntroDBDriver, DSN: cfg.IntroDBDSN})
+	lettingsDB, err := db.Open(db.Config{Driver: cfg.LettingsDBDriver, DSN: cfg.LettingsDBDSN})
+	permDB, err := db.Open(db.Config{Driver: cfg.PermissionDBDriver, DSN: cfg.PermissionDBDSB})
+	rolepermissionDB, err := db.Open(db.Config{Driver: cfg.RolPermissioneDBDriver, DSN: cfg.RolePermissionDBDSN})
+	userroleDB, err := db.Open(db.Config{Driver: cfg.UserRoleDBDriver, DSN: cfg.UserRoleDBDSN})
+
+	// 2. Migrate if SQLite
+	if cfg.UserDBDriver == "sqlite" {
 		migrate.MigrateSQLite(conn, "./migrations/users")
+	}
+	if cfg.SalesDBDriver == "sqlite" {
+		migrate.MigrateSQLite(conn, "./migrations/sales")
+	}
+	if cfg.CommissionDBDriver == "sqlite" {
+		migrate.MigrateSQLite(conn, "./migrations/commissions")
+	}
+	if cfg.PropertyDBDriver == "sqlite" {
+		migrate.MigrateSQLite(conn, "./migrations/property")
+	}
+	if cfg.BuyerDBDriver == "sqlite" {
+		migrate.MigrateSQLite(conn, "./migrations/buyer")
+	}
+	if cfg.PlanDBDriver == "sqlite" {
+		migrate.MigrateSQLite(conn, "./migrations/plans")
+	}
+	if cfg.InstDBDriver == "sqlite" {
+		migrate.MigrateSQLite(conn, "./migrations/installments")
+	}
+	if cfg.LettingsDBDriver == "sqlite" {
+		migrate.MigrateSQLite(conn, "./migrations/lettings")
+	}
+	if cfg.PermissionDBDriver == "sqlite" {
+		migrate.MigrateSQLite(conn, "./migrations/permissions")
+	}
+	if cfg.RolPermissioneDBDriver == "sqlite" {
+		migrate.MigrateSQLite(conn, "./migrations/rolepermissions")
+	}
+	if cfg.BuyerDBDriver == "sqlite" {
+		migrate.MigrateSQLite(conn, "./migrations/buyer")
+	}
+	if cfg.UserRoleDBDriver == "sqlite" {
+		migrate.MigrateSQLite(conn, "./migrations/userrole")
 	}
 
 	// Build repos
-	roleRepo := repos.NewDBRoleRepo(conn, cfg.Driver)
-	permRepo := repos.NewDBPermissionRepo(conn, cfg.Driver)
-	rolePermRepo := repos.NewDBRolePermissionRepo(conn, cfg.Driver)
-	userRoleRepo := repos.NewDBUserRoleRepo(conn, cfg.Driver)
-
+	roleRepo := repos.NewDBRoleRepo(conn, cfg.RoleDBDriver)
+	permRepo := repos.NewDBPermissionRepo(conn, cfg.PermissionDBDriver)
+	rolePermRepo := repos.NewDBRolePermissionRepo(conn, cfg.RolePermissionDBDriver)
+	userRoleRepo := repos.NewDBUserRoleRepo(conn, cfg.UserRoleDBDriver)
+	userRepo  := repos.NewDBUserRepo(userDB, cfg.UserDBDriver)
+	salesRepo := repos.NewDBSalesRepo(salesDB, cfg.SalesDBDriver)
+	commissionRepo := repos.NewDBCommissionRepo(conn, cfg.CommissionDBDriver)
+	propRepo := repos.NewDBPermissionRepo(conn, cfg.PropertyDBDriver)
+	pricingRepo := repos.NewDBRolePermissionRepo(conn, cfg.PricingDBDriver)
+	buyerRepo := repos.NewDBUserRoleRepo(conn, cfg.BuyerDBDriver)
+	planRepo  := repos.NewDBUserRepo(userDB, cfg.PlanDBDriver)
+	instRepo := repos.NewDBSalesRepo(salesDB, cfg.InstDBDriver)
+	payRepo  := repos.NewDBUserRepo(userDB, cfg.PayDBDriver)
+	introRepo := repos.NewDBSalesRepo(salesDB, cfg.IntroDBDriver)
+	lettingsRepo := repos.NewDBCommissionRepo(conn, cfg.LettingsDBDriver)
+	
+	/*
 	// For Sales domain:
 	salesCfg := db.LoadConfigPrefix("SALES_")
 	salesDB, _ := db.Open(salesCfg)
@@ -81,7 +150,7 @@ func main() {
 	}
 
 	userCfg := db.LoadConfigPrefix("USER_")
-	userDB, err := db.Open(userCfg)
+	userDB, err := db.Open(db.Config{Driver: cfg.UserDBDriver, DSN: cfg.UserDBDSN})
 	if userCfg.Driver == "sqlite" {
 		// run all your .sql files in migrations/users
 		if err := migrate.MigrateSQLite(userDB, "./migrations/users"); err != nil {
@@ -164,6 +233,7 @@ func main() {
 	salesRepo := repos.NewDBSalesRepo(salesDB, salesCfg.Driver)
 	userRepo := apiRepos.NewDBUserRepo(conn, userCfg.Driver)
 
+	
 	// 2. Initialize repositories (one per domain)
 	//userRepo, _ := apiRepos.NewDBUserRepo(conn, cfg.Driver)
 	commissionRepo := apiRepos.NewDBCommissionsRepo(conn, commissionCfg.Driver)
@@ -176,7 +246,7 @@ func main() {
 	//salesRepo, _ := apiRepos.NewSQLdbSalesRepo(conn, cfg.Driver)
 	introRepo := apiRepos.NewDBIntroductionsRepo(conn, introCfg.Driver)
 	lettingsRepo := apiRepos.NewDBLettingsRepo(conn, lettingsCfg.Driver)
-
+	*/
 	// 3. Construct services
 	jwtSecret := os.Getenv("APP_JWT_SECRET")
 	if jwtSecret == "" {
@@ -185,7 +255,8 @@ func main() {
 
 	authzSvc := services.NewAuthZService(permRepo, rolePermRepo, userRoleRepo)
 
-	authSvc := apiServices.NewAuthService(userRepo, jwtSecret, time.Hour*24)
+	//authSvc := apiServices.NewAuthService(userRepo, jwtSecret, time.Hour*24)
+	authSvc := services.NewAuthService(userRepo, cfg.AppJWTSecret, time.Hour*24)
 
 	propSvc := apiServices.NewPropertyService(propRepo, userRepo, pricingRepo)
 	buyerSvc := apiServices.NewBuyerService(buyerRepo)
