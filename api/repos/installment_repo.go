@@ -15,3 +15,17 @@ type InstallmentRepo interface {
 	Update(ctx context.Context, inst *models.Installment) error // inst.TenantID and inst.ID must be set
 	Delete(ctx context.Context, tenantID string, id int64) error
 }
+
+/ NewDBInstallmentRepo selects the concrete implementation based on driver.
+func NewDBInstallmentRepo(db *sql.DB, driver string) InstallmentRepo {
+	switch driver {
+	case "postgres":
+		return &postgresInstallmentRepo{db: db}
+	case "oracle":
+		return &oracleInstallmentRepo{db: db}
+	case "sqlite":
+		return &sqliteInstallmentRepo{db: db}
+	default:
+		panic("unsupported driver: " + driver)
+	}
+}

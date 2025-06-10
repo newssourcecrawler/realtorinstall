@@ -15,3 +15,17 @@ type CommissionRepo interface {
 	TotalCommissionByBeneficiary(ctx context.Context, tenantID string) ([]models.CommissionSummary, error)
 	GetCommissionDetailsForBeneficiary(ctx context.Context, tenantID string, beneficiaryID int64) ([]*models.Commission, error)
 }
+
+/ NewDBCommissionRepo selects the concrete implementation based on driver.
+func NewDBCommissionRepo(db *sql.DB, driver string) CommissionRepo {
+	switch driver {
+	case "postgres":
+		return &postgresCommissionRepo{db: db}
+	case "oracle":
+		return &oracleCommissionRepo{db: db}
+	case "sqlite":
+		return &sqliteCommissionRepo{db: db}
+	default:
+		panic("unsupported driver: " + driver)
+	}
+}

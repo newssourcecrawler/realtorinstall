@@ -2,6 +2,7 @@ package repos
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
@@ -20,4 +21,18 @@ type PropertyRepo interface {
 type PropertyPaymentVolume struct {
 	PropertyID      int64   `json:"property_id"`
 	TotalPaidAmount float64 `json:"total_paid"`
+}
+
+// NewDBPropertyRepo selects the concrete implementation based on driver.
+func NewDBPropertyRepo(db *sql.DB, driver string) PropertyRepo {
+	switch driver {
+	case "postgres":
+		return &postgresPropertyRepo{db: db}
+	case "oracle":
+		return &oraclePropertyRepo{db: db}
+	case "sqlite":
+		return &sqlitePropertyRepo{db: db}
+	default:
+		panic("unsupported driver: " + driver)
+	}
 }

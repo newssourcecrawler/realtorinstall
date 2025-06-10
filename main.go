@@ -13,13 +13,24 @@ import (
 	"github.com/newssourcecrawler/realtorinstall/api/repos"
 	"github.com/newssourcecrawler/realtorinstall/api/services"
 	"github.com/newssourcecrawler/realtorinstall/internal/utils"
+	"github.com/newssourcecrawler/realtorinstall/migrate"
 )
 
 func main() {
 	// 1. Load config (must include DatabasePath)
 	cfg, err := utils.LoadConfig("config/config.json")
+	//cfg := db.LoadConfigPrefix("APP_") // or just LoadConfig()
+	//conn, err := db.Open(cfg)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
+		//log.Fatalf("migrations: %v", err)
+	}
+
+	// Run your local migrations
+	if cfg.Driver == "sqlite" {
+		if err := migrate.MigrateSQLite(conn, "./migrations"); err != nil {
+			log.Fatalf("migrations: %v", err)
+		}
 	}
 
 	// 2. Ensure data directory exists (SQLite files live here)

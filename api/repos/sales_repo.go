@@ -2,6 +2,7 @@ package repos
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
@@ -19,4 +20,18 @@ type SalesRepo interface {
 type MonthSales struct {
 	Month      string  `json:"month"`
 	TotalSales float64 `json:"total_sales"`
+}
+
+// NewDBSalesRepo selects the concrete implementation based on driver.
+func NewDBSalesRepo(db *sql.DB, driver string) SalesRepo {
+	switch driver {
+	case "postgres":
+		return &postgresSalesRepo{db: db}
+	case "oracle":
+		return &oracleSalesRepo{db: db}
+	case "sqlite":
+		return &sqliteSalesRepo{db: db}
+	default:
+		panic("unsupported driver: " + driver)
+	}
 }

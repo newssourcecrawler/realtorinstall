@@ -22,3 +22,17 @@ type PlanSummary struct {
 	PlanID           int64   `json:"plan_id"`
 	TotalOutstanding float64 `json:"total_outstanding"`
 }
+
+/ NewDBInstallmentPlanRepo selects the concrete implementation based on driver.
+func NewDBInstallmentPlanRepo(db *sql.DB, driver string) InstallmentPlanRepo {
+	switch driver {
+	case "postgres":
+		return &postgresInstallmentPlanRepo{db: db}
+	case "oracle":
+		return &oracleInstallmentPlanRepo{db: db}
+	case "sqlite":
+		return &sqliteInstallmentPlanRepo{db: db}
+	default:
+		panic("unsupported driver: " + driver)
+	}
+}

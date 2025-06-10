@@ -7,6 +7,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,9 +21,11 @@ import (
 	"github.com/360EntSecGroup-Skylar/excelize"
 
 	"github.com/newssourcecrawler/realtorinstall/api/handlers"
+	"github.com/newssourcecrawler/realtorinstall/api/repos"
 	apiRepos "github.com/newssourcecrawler/realtorinstall/api/repos"
 	apiServices "github.com/newssourcecrawler/realtorinstall/api/services"
 	"github.com/newssourcecrawler/realtorinstall/dbmigrations"
+	"github.com/your-org/realtorinstall/api/internal/db"
 )
 
 func main() {
@@ -31,30 +34,109 @@ func main() {
 		panic(fmt.Errorf("mkdir data: %w", err))
 	}
 
-	userDB, _ := openDB("data/users.db")
-	commissionDB, _ := openDB("data/commissions.db")
-	propDB, _ := openDB("data/properties.db")
-	pricingDB, _ := openDB("data/pricing.db")
-	buyerDB, _ := openDB("data/buyers.db")
-	planDB, _ := openDB("data/plans.db")
-	instDB, _ := openDB("data/installments.db")
-	payDB, _ := openDB("data/payments.db")
-	salesDB, _ := openDB("data/sales.db")
-	introDB, _ := openDB("data/introductions.db")
-	lettingsDB, _ := openDB("data/lettings.db")
+	cfg := db.LoadConfig()
+	conn, err := db.Open(cfg)
+	if err != nil {
+		log.Fatalf("DB open error: %v", err)
+	}
+
+	/*
+		userDB, _ := openDB("data/users.db")
+		commissionDB, _ := openDB("data/commissions.db")
+		propDB, _ := openDB("data/properties.db")
+		pricingDB, _ := openDB("data/pricing.db")
+		buyerDB, _ := openDB("data/buyers.db")
+		planDB, _ := openDB("data/plans.db")
+		instDB, _ := openDB("data/installments.db")
+		payDB, _ := openDB("data/payments.db")
+		salesDB, _ := openDB("data/sales.db")
+		introDB, _ := openDB("data/introductions.db")
+		lettingsDB, _ := openDB("data/lettings.db")
+	*/
+
+	// For Sales domain:
+	salesCfg := db.LoadConfigPrefix("SALES_")
+	userCfg := db.LoadConfigPrefix("USER_")
+	commissionCfg := db.LoadConfigPrefix("COMMISSION_")
+	propCfg := db.LoadConfigPrefix("PROPERTY_")
+	pricingCfg := db.LoadConfigPrefix("PRICING_")
+	buyerCfg := db.LoadConfigPrefix("BUYER_")
+	planCfg := db.LoadConfigPrefix("PLAN_")
+	instCfg := db.LoadConfigPrefix("INSTALLMENTS_")
+	payCfg := db.LoadConfigPrefix("PAYMENTS_")
+	introCfg := db.LoadConfigPrefix("INTRODUCTIONS_")
+	lettingsCfg := db.LoadConfigPrefix("LETTINGS_")
+
+	salesDB, err := db.Open(salesCfg)
+	if err != nil {
+		log.Fatalf("Sales DB error: %v", err)
+	}
+
+	userDB, err := db.Open(userCfg)
+	if err != nil {
+		log.Fatalf("User DB error: %v", err)
+	}
+
+	commissionDB, err := db.Open(commissionCfg)
+	if err != nil {
+		log.Fatalf("Commission DB error: %v", err)
+	}
+
+	propDB, err := db.Open(propCfg)
+	if err != nil {
+		log.Fatalf("Property DB error: %v", err)
+	}
+
+	pricingDB, err := db.Open(pricingCfg)
+	if err != nil {
+		log.Fatalf("Pricing DB error: %v", err)
+	}
+
+	buyerDB, err := db.Open(buyerCfg)
+	if err != nil {
+		log.Fatalf("Buyer DB error: %v", err)
+	}
+
+	planDB, err := db.Open(planCfg)
+	if err != nil {
+		log.Fatalf("Installment plan DB error: %v", err)
+	}
+
+	instDB, err := db.Open(instCfg)
+	if err != nil {
+		log.Fatalf("Installment DB error: %v", err)
+	}
+
+	payDB, err := db.Open(payCfg)
+	if err != nil {
+		log.Fatalf("Payments DB error: %v", err)
+	}
+
+	introDB, err := db.Open(introCfg)
+	if err != nil {
+		log.Fatalf("Introductions DB error: %v", err)
+	}
+
+	lettingsDB, err := db.Open(lettingsCfg)
+	if err != nil {
+		log.Fatalf("Lettings DB error: %v", err)
+	}
+
+	salesRepo := repos.NewDBSalesRepo(salesDB, salesCfg.Driver)
+	userRepo, _ := apiRepos.NewDBUserRepo(conn, cfg.Driver)
 
 	// 2. Initialize repositories (one per domain)
-	userRepo, _ := apiRepos.NewSQLiteUserRepo(userDB)
-	commissionRepo, _ := apiRepos.NewSQLiteCommissionRepo(commissionDB)
-	propRepo, _ := apiRepos.NewSQLitePropertyRepo(propDB)
-	pricingRepo, _ := apiRepos.NewSQLiteLocationPricingRepo(pricingDB)
-	buyerRepo, _ := apiRepos.NewSQLiteBuyerRepo(buyerDB)
-	planRepo, _ := apiRepos.NewSQLiteInstallmentPlanRepo(planDB)
-	instRepo, _ := apiRepos.NewSQLiteInstallmentRepo(instDB)
-	payRepo, _ := apiRepos.NewSQLitePaymentRepo(payDB)
-	salesRepo, _ := apiRepos.NewSQLiteSalesRepo(salesDB)
-	introRepo, _ := apiRepos.NewSQLiteIntroductionsRepo(introDB)
-	lettingsRepo, _ := apiRepos.NewSQLiteLettingsRepo(lettingsDB)
+	//userRepo, _ := apiRepos.NewDBUserRepo(conn, cfg.Driver)
+	commissionRepo := apiRepos.NewDBCommissionRepo(conn, cfg.Driver)
+	propRepo := apiRepos.NewDBPropertyRepo(conn, cfg.Driver)
+	pricingRepo := apiRepos.NewDBLocationPricingRepo(conn, cfg.Driver)
+	buyerRepo := apiRepos.NewDBBuyerRepo(conn, cfg.Driver)
+	planRepo := apiRepos.NewDBInstallmentPlanRepo(conn, cfg.Driver)
+	instRepo := apiRepos.NewDBInstallmentRepo(conn, cfg.Driver)
+	payRepo := apiRepos.NewDBPaymentRepo(conn, cfg.Driver)
+	//salesRepo, _ := apiRepos.NewSQLdbSalesRepo(conn, cfg.Driver)
+	introRepo := apiRepos.NewDBIntroductionsRepo(conn, cfg.Driver)
+	lettingsRepo := apiRepos.NewDBLettingsRepo(conn, cfg.Driver)
 
 	// 3. Construct services
 	jwtSecret := os.Getenv("APP_JWT_SECRET")

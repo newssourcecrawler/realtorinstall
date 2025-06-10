@@ -16,8 +16,22 @@ type LettingsRepo interface {
 	SummarizeRentRoll(ctx context.Context, tenantID string) ([]models.RentRoll, error)
 }
 
-// RentRoll holds a property_id and total rent currently active.
+// RentRoll holds a Lettings_id and total rent currently active.
 type RentRoll struct {
-	PropertyID int64   `json:"property_id"`
+	LettingsID int64   `json:"Lettings_id"`
 	TotalRent  float64 `json:"total_rent"`
+}
+
+/ NewDBLettingsRepo selects the concrete implementation based on driver.
+func NewDBLettingsRepo(db *sql.DB, driver string) LettingsRepo {
+	switch driver {
+	case "postgres":
+		return &postgresLettingsRepo{db: db}
+	case "oracle":
+		return &oracleLettingsRepo{db: db}
+	case "sqlite":
+		return &sqliteLettingsRepo{db: db}
+	default:
+		panic("unsupported driver: " + driver)
+	}
 }

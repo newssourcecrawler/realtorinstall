@@ -2,6 +2,7 @@ package repos
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
@@ -14,4 +15,18 @@ type PaymentRepo interface {
 	ListByInstallment(ctx context.Context, tenantID string, installmentID int64) ([]*models.Payment, error)
 	Update(ctx context.Context, p *models.Payment) error
 	Delete(ctx context.Context, tenantID string, id int64) error
+}
+
+// NewDBPaymentRepo selects the concrete implementation based on driver.
+func NewDBPaymentRepo(db *sql.DB, driver string) PaymentRepo {
+	switch driver {
+	case "postgres":
+		return &postgresPaymentRepo{db: db}
+	case "oracle":
+		return &oraclePaymentRepo{db: db}
+	case "sqlite":
+		return &sqlitePaymentRepo{db: db}
+	default:
+		panic("unsupported driver: " + driver)
+	}
 }

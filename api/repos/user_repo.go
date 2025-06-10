@@ -2,6 +2,7 @@ package repos
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
@@ -30,4 +31,18 @@ type UserRepo interface {
 	// Delete performs a “soft delete” for (tenantID, id). If that row is already deleted,
 	// returns ErrNotFound. Otherwise sets deleted=1, modified_by, last_modified.
 	Delete(ctx context.Context, tenantID string, id int64) error
+}
+
+// User Repo selects the concrete implementation based on driver.
+func NewDBUserRepo(db *sql.DB, driver string) UserRepo {
+	switch driver {
+	case "postgres":
+		return NewPostgresUserRepo(db)
+	case "sqlite":
+		return NewSQLiteUserRepo(db),
+	case "neo4j":
+		return NewNeo4JUserRepo(db)
+	default:
+		panic("unsupported driver: " + driver)
+	}
 }

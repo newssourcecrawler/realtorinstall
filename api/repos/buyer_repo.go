@@ -13,3 +13,17 @@ type BuyerRepo interface {
 	Update(ctx context.Context, b *models.Buyer) error // using b.TenantID,b.ID
 	Delete(ctx context.Context, tenantID string, id int64) error
 }
+
+/ NewDBBuyerRepo selects the concrete implementation based on driver.
+func NewDBBuyerRepo(db *sql.DB, driver string) BuyerRepo {
+	switch driver {
+	case "postgres":
+		return &postgresBuyerRepo{db: db}
+	case "oracle":
+		return &oracleBuyerRepo{db: db}
+	case "sqlite":
+		return &sqliteBuyerRepo{db: db}
+	default:
+		panic("unsupported driver: " + driver)
+	}
+}
