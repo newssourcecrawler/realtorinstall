@@ -15,9 +15,6 @@ __MACOSX/
 .idea/
 *.swp
 
-# Config (keep examples, but not real)
-config.json
-
 # Go
 bin/
 pkg/
@@ -40,10 +37,6 @@ data/*.db
 .config/realtor_install/keys/
 ~/Licenses/
 scripts/
-certs/
-
-# Fyne build
-*.fvhighlight
 
 # Python
 __pycache__/
@@ -51,6 +44,3 @@ __pycache__/
 
 # Logs
 *.log
-
-# Migrations built artifacts
-migrations/*.go
