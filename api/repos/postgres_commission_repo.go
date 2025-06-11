@@ -6,48 +6,19 @@ import (
 	"errors"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 	"github.com/newssourcecrawler/realtorinstall/api/models"
-	//"github.com/newssourcecrawler/realtorinstall/api/repos"
 )
 
-type sqliteCommissionRepo struct {
+type postgresCommissionRepo struct {
 	db *sql.DB
 }
 
-func NewSQLiteCommissionRepo(dbPath string) (CommissionRepo, error) {
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return nil, err
-	}
-	schema := `
-	CREATE TABLE IF NOT EXISTS commissions (
-	  id                INTEGER PRIMARY KEY AUTOINCREMENT,
-	  tenant_id         TEXT    NOT NULL,
-	  transaction_type  TEXT    NOT NULL,
-	  transaction_id    INTEGER NOT NULL,
-	  beneficiary_id    INTEGER NOT NULL,
-	  commission_type   TEXT    NOT NULL,
-	  rate_or_amount    REAL    NOT NULL,
-	  calculated_amount REAL    NOT NULL,
-	  memo              TEXT,
-	  created_by        TEXT    NOT NULL,
-	  created_at        DATETIME NOT NULL,
-	  modified_by       TEXT    NOT NULL,
-	  last_modified     DATETIME NOT NULL,
-	  deleted           INTEGER NOT NULL DEFAULT 0
-	);
-	CREATE INDEX IF NOT EXISTS idx_commissions_tenant ON commissions(tenant_id);
-	CREATE INDEX IF NOT EXISTS idx_commissions_txn     ON commissions(transaction_type, transaction_id);
-	CREATE INDEX IF NOT EXISTS idx_commissions_benef    ON commissions(beneficiary_id);
-	`
-	if _, err := db.Exec(schema); err != nil {
-		return nil, err
-	}
-	return &sqliteCommissionRepo{db: db}, nil
+func NewPostgresCommissionRepo(db *sql.DB) CommissionRepo {
+	return &postgresCommissionRepo{db: db}
 }
 
-func (r *sqliteCommissionRepo) Create(ctx context.Context, comm *models.Commission) (int64, error) {
+func (r *postgresCommissionRepo) Create(ctx context.Context, comm *models.Commission) (int64, error) {
 	if comm.TenantID == "" ||
 		comm.TransactionType == "" ||
 		comm.TransactionID == 0 ||
@@ -88,7 +59,7 @@ func (r *sqliteCommissionRepo) Create(ctx context.Context, comm *models.Commissi
 	return res.LastInsertId()
 }
 
-func (r *sqliteCommissionRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.Commission, error) {
+func (r *postgresCommissionRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.Commission, error) {
 	query := `
 	SELECT id, tenant_id, transaction_type, transaction_id, beneficiary_id,
 	       commission_type, rate_or_amount, calculated_amount, memo,
@@ -126,7 +97,7 @@ func (r *sqliteCommissionRepo) GetByID(ctx context.Context, tenantID string, id 
 	return &comm, nil
 }
 
-func (r *sqliteCommissionRepo) ListAll(ctx context.Context, tenantID string) ([]*models.Commission, error) {
+func (r *postgresCommissionRepo) ListAll(ctx context.Context, tenantID string) ([]*models.Commission, error) {
 	query := `
 	SELECT id, tenant_id, transaction_type, transaction_id, beneficiary_id,
 	       commission_type, rate_or_amount, calculated_amount, memo,
@@ -168,7 +139,7 @@ func (r *sqliteCommissionRepo) ListAll(ctx context.Context, tenantID string) ([]
 	return out, nil
 }
 
-func (r *sqliteCommissionRepo) Update(ctx context.Context, comm *models.Commission) error {
+func (r *postgresCommissionRepo) Update(ctx context.Context, comm *models.Commission) error {
 	existing, err := r.GetByID(ctx, comm.TenantID, comm.ID)
 	if err != nil {
 		return err
@@ -203,7 +174,7 @@ func (r *sqliteCommissionRepo) Update(ctx context.Context, comm *models.Commissi
 	return err
 }
 
-func (r *sqliteCommissionRepo) Delete(ctx context.Context, tenantID string, id int64) error {
+func (r *postgresCommissionRepo) Delete(ctx context.Context, tenantID string, id int64) error {
 	existing, err := r.GetByID(ctx, tenantID, id)
 	if err != nil {
 		return err
@@ -226,7 +197,7 @@ func (r *sqliteCommissionRepo) Delete(ctx context.Context, tenantID string, id i
 }
 
 // TotalCommissionByBeneficiary sums all earned commissions per beneficiary.
-func (r *sqliteCommissionRepo) TotalCommissionByBeneficiary(ctx context.Context, tenantID string) ([]models.CommissionSummary, error) {
+func (r *postgresCommissionRepo) TotalCommissionByBeneficiary(ctx context.Context, tenantID string) ([]models.CommissionSummary, error) {
 	query := `
         SELECT beneficiary_id, SUM(calculated_amount) AS total_commission
           FROM commissions
@@ -251,7 +222,7 @@ func (r *sqliteCommissionRepo) TotalCommissionByBeneficiary(ctx context.Context,
 }
 
 // TotalCommissionByBeneficiary sums all earned commissions per beneficiary.
-func (r *sqliteCommissionRepo) GetCommissionDetailsForBeneficiary(
+func (r *postgresCommissionRepo) GetCommissionDetailsForBeneficiary(
 	ctx context.Context,
 	tenantID string,
 	beneficiaryID int64,

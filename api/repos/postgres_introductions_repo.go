@@ -6,48 +6,19 @@ import (
 	"errors"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
 
-type sqliteIntroductionsRepo struct {
+type postgresIntroductionsRepo struct {
 	db *sql.DB
 }
 
-func NewSQLiteIntroductionsRepo(dbPath string) (IntroductionsRepo, error) {
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return nil, err
-	}
-	schema := `
-	CREATE TABLE IF NOT EXISTS introductions (
-	  id                INTEGER PRIMARY KEY AUTOINCREMENT,
-	  tenant_id         TEXT    NOT NULL,
-	  introducer_id     INTEGER NOT NULL,
-	  introduced_party  TEXT    NOT NULL,
-	  property_id       INTEGER NOT NULL,
-	  transaction_id    INTEGER,
-	  transaction_type	TEXT NOT NULL,
-	  intro_date        DATETIME NOT NULL,
-	  agreed_fee        REAL    NOT NULL,
-	  fee_type          TEXT    NOT NULL,
-	  created_by        TEXT    NOT NULL,
-	  created_at        DATETIME NOT NULL,
-	  modified_by       TEXT    NOT NULL,
-	  last_modified     DATETIME NOT NULL,
-	  deleted           INTEGER NOT NULL DEFAULT 0
-	);
-	CREATE INDEX IF NOT EXISTS idx_introductions_tenant ON introductions(tenant_id);
-	CREATE INDEX IF NOT EXISTS idx_introductions_introducer ON introductions(introducer_id);
-	CREATE INDEX IF NOT EXISTS idx_introductions_property ON introductions(property_id);
-	`
-	if _, err := db.Exec(schema); err != nil {
-		return nil, err
-	}
-	return &sqliteIntroductionsRepo{db: db}, nil
+func NewPostgresIntroductionsRepo(db *sql.DB) IntroductionsRepo {
+	return &postgresIntroductionsRepo{db: db}
 }
 
-func (r *sqliteIntroductionsRepo) Create(ctx context.Context, intro *models.Introductions) (int64, error) {
+func (r *postgresIntroductionsRepo) Create(ctx context.Context, intro *models.Introductions) (int64, error) {
 	if intro.TenantID == "" ||
 		intro.IntroducerID == 0 ||
 		intro.IntroducedParty == "" ||
@@ -88,7 +59,7 @@ func (r *sqliteIntroductionsRepo) Create(ctx context.Context, intro *models.Intr
 	return res.LastInsertId()
 }
 
-func (r *sqliteIntroductionsRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.Introductions, error) {
+func (r *postgresIntroductionsRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.Introductions, error) {
 	query := `
 	SELECT id, tenant_id, introducer_id, introduced_party, property_id, transaction_id,
 	       intro_date, agreed_fee, fee_type, created_by, created_at, modified_by, last_modified, deleted
@@ -125,7 +96,7 @@ func (r *sqliteIntroductionsRepo) GetByID(ctx context.Context, tenantID string, 
 	return &intro, nil
 }
 
-func (r *sqliteIntroductionsRepo) ListAll(ctx context.Context, tenantID string) ([]*models.Introductions, error) {
+func (r *postgresIntroductionsRepo) ListAll(ctx context.Context, tenantID string) ([]*models.Introductions, error) {
 	query := `
 	SELECT id, tenant_id, introducer_id, introduced_party, property_id, transaction_id,
 	       intro_date, agreed_fee, fee_type, created_by, created_at, modified_by, last_modified, deleted
@@ -166,7 +137,7 @@ func (r *sqliteIntroductionsRepo) ListAll(ctx context.Context, tenantID string) 
 	return out, nil
 }
 
-func (r *sqliteIntroductionsRepo) Update(ctx context.Context, intro *models.Introductions) error {
+func (r *postgresIntroductionsRepo) Update(ctx context.Context, intro *models.Introductions) error {
 	existing, err := r.GetByID(ctx, intro.TenantID, intro.ID)
 	if err != nil {
 		return err
@@ -200,7 +171,7 @@ func (r *sqliteIntroductionsRepo) Update(ctx context.Context, intro *models.Intr
 	return err
 }
 
-func (r *sqliteIntroductionsRepo) Delete(ctx context.Context, tenantID string, id int64) error {
+func (r *postgresIntroductionsRepo) Delete(ctx context.Context, tenantID string, id int64) error {
 	existing, err := r.GetByID(ctx, tenantID, id)
 	if err != nil {
 		return err

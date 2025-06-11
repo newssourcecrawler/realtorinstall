@@ -22,8 +22,6 @@ func NewDBPaymentRepo(db *sql.DB, driver string) PaymentRepo {
 	switch driver {
 	case "postgres":
 		return &postgresPaymentRepo{db: db}
-	case "oracle":
-		return &oraclePaymentRepo{db: db}
 	case "sqlite":
 		return &sqlitePaymentRepo{db: db}
 	default:

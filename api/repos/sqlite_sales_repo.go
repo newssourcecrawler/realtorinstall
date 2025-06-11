@@ -206,7 +206,7 @@ func (r *sqliteSalesRepo) Delete(ctx context.Context, tenantID string, id int64)
 	return err
 }
 
-func (r *sqliteCommissionRepo) SummarizeByBeneficiary(ctx context.Context, tenantID string) ([]models.CommissionSummary, error) {
+func (r *sqliteCommissionRepo) SQLiteSummarizeByBeneficiary(ctx context.Context, tenantID string) ([]models.CommissionSummary, error) {
 	query := `
         SELECT beneficiary_id, SUM(calculated_amount) AS total_commission
           FROM commissions

@@ -1,5 +1,3 @@
-// api/repos/sqlite_installment_repo.go
-
 package repos
 
 import (
@@ -8,47 +6,19 @@ import (
 	"errors"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
 
-type sqliteInstallmentRepo struct {
+type postgresInstallmentRepo struct {
 	db *sql.DB
 }
 
-func NewSQLiteInstallmentRepo(dbPath string) (InstallmentRepo, error) {
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return nil, err
-	}
-	schema := `
-	CREATE TABLE IF NOT EXISTS installments (
-	  id INTEGER PRIMARY KEY AUTOINCREMENT,
-	  tenant_id TEXT NOT NULL,
-	  plan_id INTEGER NOT NULL,
-	  sequence_number INTEGER NOT NULL,
-	  due_date DATETIME NOT NULL,
-	  amount_due REAL NOT NULL,
-	  amount_paid REAL NOT NULL,
-	  status TEXT NOT NULL,
-	  late_fee REAL NOT NULL,
-	  paid_date DATETIME,
-	  created_by TEXT NOT NULL,
-	  created_at DATETIME NOT NULL,
-	  modified_by TEXT NOT NULL,
-	  last_modified DATETIME NOT NULL,
-	  deleted INTEGER NOT NULL DEFAULT 0
-	);
-	CREATE INDEX IF NOT EXISTS idx_installments_tenant ON installments(tenant_id);
-	CREATE INDEX IF NOT EXISTS idx_installments_plan ON installments(plan_id);
-	`
-	if _, err := db.Exec(schema); err != nil {
-		return nil, err
-	}
-	return &sqliteInstallmentRepo{db: db}, nil
+func NewPostgresInstallmentRepo(db *sql.DB) InstallmentRepo {
+	return &postgresInstallmentRepo{db: db}
 }
 
-func (r *sqliteInstallmentRepo) Create(ctx context.Context, inst *models.Installment) (int64, error) {
+func (r *postgresInstallmentRepo) Create(ctx context.Context, inst *models.Installment) (int64, error) {
 	if inst.TenantID == "" || inst.PlanID == 0 || inst.CreatedBy == "" || inst.ModifiedBy == "" {
 		return 0, errors.New("missing required fields or tenant/audit info")
 	}
@@ -83,7 +53,7 @@ func (r *sqliteInstallmentRepo) Create(ctx context.Context, inst *models.Install
 	return res.LastInsertId()
 }
 
-func (r *sqliteInstallmentRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.Installment, error) {
+func (r *postgresInstallmentRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.Installment, error) {
 	query := `
 	SELECT id, tenant_id, plan_id, sequence_number, due_date, amount_due, amount_paid, status, late_fee, paid_date,
 	       created_by, created_at, modified_by, last_modified, deleted
@@ -121,7 +91,7 @@ func (r *sqliteInstallmentRepo) GetByID(ctx context.Context, tenantID string, id
 	return &inst, nil
 }
 
-func (r *sqliteInstallmentRepo) ListAll(ctx context.Context, tenantID string) ([]*models.Installment, error) {
+func (r *postgresInstallmentRepo) ListAll(ctx context.Context, tenantID string) ([]*models.Installment, error) {
 	query := `
 	SELECT id, tenant_id, plan_id, sequence_number, due_date, amount_due, amount_paid, status, late_fee, paid_date,
 	       created_by, created_at, modified_by, last_modified, deleted
@@ -163,7 +133,7 @@ func (r *sqliteInstallmentRepo) ListAll(ctx context.Context, tenantID string) ([
 	return out, nil
 }
 
-func (r *sqliteInstallmentRepo) ListByPlan(ctx context.Context, tenantID string, planID int64) ([]*models.Installment, error) {
+func (r *postgresInstallmentRepo) ListByPlan(ctx context.Context, tenantID string, planID int64) ([]*models.Installment, error) {
 	query := `
 	SELECT id, tenant_id, plan_id, sequence_number, due_date, amount_due, amount_paid, status, late_fee, paid_date,
 	       created_by, created_at, modified_by, last_modified, deleted
@@ -205,7 +175,7 @@ func (r *sqliteInstallmentRepo) ListByPlan(ctx context.Context, tenantID string,
 	return out, nil
 }
 
-func (r *sqliteInstallmentRepo) Update(ctx context.Context, inst *models.Installment) error {
+func (r *postgresInstallmentRepo) Update(ctx context.Context, inst *models.Installment) error {
 	existing, err := r.GetByID(ctx, inst.TenantID, inst.ID)
 	if err != nil {
 		return err
@@ -240,7 +210,7 @@ func (r *sqliteInstallmentRepo) Update(ctx context.Context, inst *models.Install
 	return err
 }
 
-func (r *sqliteInstallmentRepo) Delete(ctx context.Context, tenantID string, id int64) error {
+func (r *postgresInstallmentRepo) Delete(ctx context.Context, tenantID string, id int64) error {
 	existing, err := r.GetByID(ctx, tenantID, id)
 	if err != nil {
 		return err

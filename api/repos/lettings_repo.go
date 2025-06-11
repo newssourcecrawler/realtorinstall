@@ -28,8 +28,6 @@ func NewDBLettingsRepo(db *sql.DB, driver string) LettingsRepo {
 	switch driver {
 	case "postgres":
 		return &postgresLettingsRepo{db: db}
-	case "oracle":
-		return &oracleLettingsRepo{db: db}
 	case "sqlite":
 		return &sqliteLettingsRepo{db: db}
 	default:

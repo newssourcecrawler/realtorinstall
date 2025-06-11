@@ -6,44 +6,19 @@ import (
 	"errors"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
 
-type sqlitePaymentRepo struct {
+type postgresPaymentRepo struct {
 	db *sql.DB
 }
 
-func NewSQLitePaymentRepo(dbPath string) (PaymentRepo, error) {
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return nil, err
-	}
-	schema := `
-	CREATE TABLE IF NOT EXISTS payments (
-	  id INTEGER PRIMARY KEY AUTOINCREMENT,
-	  tenant_id TEXT NOT NULL,
-	  installment_id INTEGER NOT NULL,
-	  amount_paid REAL NOT NULL,
-	  payment_date DATETIME NOT NULL,
-	  payment_method TEXT NOT NULL,
-	  transaction_ref TEXT,
-	  created_by TEXT NOT NULL,
-	  created_at DATETIME NOT NULL,
-	  modified_by TEXT NOT NULL,
-	  last_modified DATETIME NOT NULL,
-	  deleted INTEGER NOT NULL DEFAULT 0
-	);
-	CREATE INDEX IF NOT EXISTS idx_payments_tenant ON payments(tenant_id);
-	CREATE INDEX IF NOT EXISTS idx_payments_installment ON payments(installment_id);
-	`
-	if _, err := db.Exec(schema); err != nil {
-		return nil, err
-	}
-	return &sqlitePaymentRepo{db: db}, nil
+func NewPostgresPaymentRepo(db *sql.DB) PaymentRepo {
+	return &postgresPaymentRepo{db: db}
 }
 
-func (r *sqlitePaymentRepo) Create(ctx context.Context, p *models.Payment) (int64, error) {
+func (r *postgresPaymentRepo) Create(ctx context.Context, p *models.Payment) (int64, error) {
 	if p.TenantID == "" || p.InstallmentID == 0 || p.AmountPaid <= 0 || p.PaymentMethod == "" || p.CreatedBy == "" || p.ModifiedBy == "" {
 		return 0, errors.New("missing required fields or tenant/audit info")
 	}
@@ -74,7 +49,7 @@ func (r *sqlitePaymentRepo) Create(ctx context.Context, p *models.Payment) (int6
 	return res.LastInsertId()
 }
 
-func (r *sqlitePaymentRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.Payment, error) {
+func (r *postgresPaymentRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.Payment, error) {
 	query := `
 	SELECT id, tenant_id, installment_id, amount_paid, payment_date, payment_method, transaction_ref,
 	       created_by, created_at, modified_by, last_modified, deleted
@@ -108,7 +83,7 @@ func (r *sqlitePaymentRepo) GetByID(ctx context.Context, tenantID string, id int
 	return &p, nil
 }
 
-func (r *sqlitePaymentRepo) ListAll(ctx context.Context, tenantID string) ([]*models.Payment, error) {
+func (r *postgresPaymentRepo) ListAll(ctx context.Context, tenantID string) ([]*models.Payment, error) {
 	query := `
 	SELECT id, tenant_id, installment_id, amount_paid, payment_date, payment_method, transaction_ref,
 	       created_by, created_at, modified_by, last_modified, deleted
@@ -146,7 +121,7 @@ func (r *sqlitePaymentRepo) ListAll(ctx context.Context, tenantID string) ([]*mo
 	return out, nil
 }
 
-func (r *sqlitePaymentRepo) ListByInstallment(ctx context.Context, tenantID string, installmentID int64) ([]*models.Payment, error) {
+func (r *postgresPaymentRepo) ListByInstallment(ctx context.Context, tenantID string, installmentID int64) ([]*models.Payment, error) {
 	query := `
 	SELECT id, tenant_id, installment_id, amount_paid, payment_date, payment_method, transaction_ref,
 	       created_by, created_at, modified_by, last_modified, deleted
@@ -184,7 +159,7 @@ func (r *sqlitePaymentRepo) ListByInstallment(ctx context.Context, tenantID stri
 	return out, nil
 }
 
-func (r *sqlitePaymentRepo) Update(ctx context.Context, p *models.Payment) error {
+func (r *postgresPaymentRepo) Update(ctx context.Context, p *models.Payment) error {
 	existing, err := r.GetByID(ctx, p.TenantID, p.ID)
 	if err != nil {
 		return err
@@ -215,7 +190,7 @@ func (r *sqlitePaymentRepo) Update(ctx context.Context, p *models.Payment) error
 	return err
 }
 
-func (r *sqlitePaymentRepo) Delete(ctx context.Context, tenantID string, id int64) error {
+func (r *postgresPaymentRepo) Delete(ctx context.Context, tenantID string, id int64) error {
 	existing, err := r.GetByID(ctx, tenantID, id)
 	if err != nil {
 		return err

@@ -22,8 +22,6 @@ func NewDBCommissionRepo(db *sql.DB, driver string) CommissionRepo {
 	switch driver {
 	case "postgres":
 		return &postgresCommissionRepo{db: db}
-	case "oracle":
-		return &oracleCommissionRepo{db: db}
 	case "sqlite":
 		return &sqliteCommissionRepo{db: db}
 	default:

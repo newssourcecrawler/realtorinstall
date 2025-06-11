@@ -262,13 +262,6 @@ func (r *sqliteInstallmentPlanRepo) Delete(ctx context.Context, tenantID string,
 	return err
 }
 
-func boolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}
-
 // SummarizeByPlan computes “amount_due − amount_paid” grouped by each plan.
 func (r *sqliteInstallmentPlanRepo) SummarizeByPlan(ctx context.Context, tenantID string) ([]models.PlanSummary, error) {
 	query := `

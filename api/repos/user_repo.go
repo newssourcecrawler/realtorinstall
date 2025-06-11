@@ -39,9 +39,7 @@ func NewDBUserRepo(db *sql.DB, driver string) UserRepo {
 	case "postgres":
 		return NewPostgresUserRepo(db)
 	case "sqlite":
-		return NewSQLiteUserRepo(db),
-	case "neo4j":
-		return NewNeo4JUserRepo(db)
+		return NewSQLiteUserRepo(db)
 	default:
 		panic("unsupported driver: " + driver)
 	}

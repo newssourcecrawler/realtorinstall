@@ -20,8 +20,6 @@ func NewDBIntroductionsRepo(db *sql.DB, driver string) IntroductionsRepo {
 	switch driver {
 	case "postgres":
 		return &postgresIntroductionsRepo{db: db}
-	case "oracle":
-		return &oracleIntroductionsRepo{db: db}
 	case "sqlite":
 		return &sqliteIntroductionsRepo{db: db}
 	default:

@@ -1,4 +1,3 @@
-// api/repos/sqlite_locationpricing_repo.go
 package repos
 
 import (
@@ -7,42 +6,19 @@ import (
 	"errors"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
 
-type sqliteLocationPricingRepo struct {
+type postgresLocationPricingRepo struct {
 	db *sql.DB
 }
 
-func NewSQLiteLocationPricingRepo(dbPath string) (LocationPricingRepo, error) {
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return nil, err
-	}
-	schema := `
-	CREATE TABLE IF NOT EXISTS location_pricing (
-	  id INTEGER PRIMARY KEY AUTOINCREMENT,
-	  tenant_id TEXT NOT NULL,
-	  zip_code TEXT NOT NULL,
-	  city TEXT NOT NULL,
-	  price_per_sqft REAL NOT NULL,
-	  effective_date DATETIME NOT NULL,
-	  created_by TEXT NOT NULL,
-	  created_at DATETIME NOT NULL,
-	  modified_by TEXT NOT NULL,
-	  last_modified DATETIME NOT NULL,
-	  deleted INTEGER NOT NULL DEFAULT 0
-	);
-	CREATE INDEX IF NOT EXISTS idx_locationpricing_tenant ON location_pricing(tenant_id);
-	`
-	if _, err := db.Exec(schema); err != nil {
-		return nil, err
-	}
-	return &sqliteLocationPricingRepo{db: db}, nil
+func NewPostgresLocationPricingRepo(db *sql.DB) LocationPricingRepo {
+	return &postgresLocationPricingRepo{db: db}
 }
 
-func (r *sqliteLocationPricingRepo) Create(ctx context.Context, lp *models.LocationPricing) (int64, error) {
+func (r *postgresLocationPricingRepo) Create(ctx context.Context, lp *models.LocationPricing) (int64, error) {
 	if lp.TenantID == "" || lp.ZipCode == "" || lp.City == "" || lp.CreatedBy == "" || lp.ModifiedBy == "" || lp.PricePerSqFt <= 0 || lp.EffectiveDate.IsZero() {
 		return 0, errors.New("missing required fields or tenant/audit info")
 	}
@@ -72,7 +48,7 @@ func (r *sqliteLocationPricingRepo) Create(ctx context.Context, lp *models.Locat
 	return res.LastInsertId()
 }
 
-func (r *sqliteLocationPricingRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.LocationPricing, error) {
+func (r *postgresLocationPricingRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.LocationPricing, error) {
 	query := `
 	SELECT id, tenant_id, zip_code, city, price_per_sqft, effective_date, created_by, created_at, modified_by, last_modified, deleted
 	FROM location_pricing
@@ -104,7 +80,7 @@ func (r *sqliteLocationPricingRepo) GetByID(ctx context.Context, tenantID string
 	return &lp, nil
 }
 
-func (r *sqliteLocationPricingRepo) ListAll(ctx context.Context, tenantID string) ([]*models.LocationPricing, error) {
+func (r *postgresLocationPricingRepo) ListAll(ctx context.Context, tenantID string) ([]*models.LocationPricing, error) {
 	query := `
 	SELECT id, tenant_id, zip_code, city, price_per_sqft, effective_date, created_by, created_at, modified_by, last_modified, deleted
 	FROM location_pricing
@@ -140,7 +116,7 @@ func (r *sqliteLocationPricingRepo) ListAll(ctx context.Context, tenantID string
 	return out, nil
 }
 
-func (r *sqliteLocationPricingRepo) Update(ctx context.Context, lp *models.LocationPricing) error {
+func (r *postgresLocationPricingRepo) Update(ctx context.Context, lp *models.LocationPricing) error {
 	existing, err := r.GetByID(ctx, lp.TenantID, lp.ID)
 	if err != nil {
 		return err
@@ -169,7 +145,7 @@ func (r *sqliteLocationPricingRepo) Update(ctx context.Context, lp *models.Locat
 	return err
 }
 
-func (r *sqliteLocationPricingRepo) Delete(ctx context.Context, tenantID string, id int64) error {
+func (r *postgresLocationPricingRepo) Delete(ctx context.Context, tenantID string, id int64) error {
 	existing, err := r.GetByID(ctx, tenantID, id)
 	if err != nil {
 		return err

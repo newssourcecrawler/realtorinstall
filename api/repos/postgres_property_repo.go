@@ -1,4 +1,3 @@
-// api/repos/sqlite_property_repo.go
 package repos
 
 import (
@@ -7,42 +6,19 @@ import (
 	"errors"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
 
-type sqlitePropertyRepo struct {
+type postgresPropertyRepo struct {
 	db *sql.DB
 }
 
-func NewSQLitePropertyRepo(dbPath string) (PropertyRepo, error) {
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return nil, err
-	}
-	schema := `
-	CREATE TABLE IF NOT EXISTS properties (
-	  id INTEGER PRIMARY KEY AUTOINCREMENT,
-	  tenant_id TEXT NOT NULL,
-	  address TEXT NOT NULL,
-	  city TEXT NOT NULL,
-	  zip TEXT NOT NULL,
-	  listing_date DATETIME NOT NULL,
-	  created_by TEXT NOT NULL,
-	  created_at DATETIME NOT NULL,
-	  modified_by TEXT NOT NULL,
-	  last_modified DATETIME NOT NULL,
-	  deleted INTEGER NOT NULL DEFAULT 0
-	);
-	CREATE INDEX IF NOT EXISTS idx_properties_tenant ON properties(tenant_id);
-	`
-	if _, err := db.Exec(schema); err != nil {
-		return nil, err
-	}
-	return &sqlitePropertyRepo{db: db}, nil
+func NewPostgresPropertyRepo(db *sql.DB) PropertyRepo {
+	return &postgresPropertyRepo{db: db}
 }
 
-func (r *sqlitePropertyRepo) Create(ctx context.Context, p *models.Property) (int64, error) {
+func (r *postgresPropertyRepo) Create(ctx context.Context, p *models.Property) (int64, error) {
 	if p.TenantID == "" || p.Address == "" || p.City == "" || p.ZIP == "" || p.CreatedBy == "" || p.ModifiedBy == "" {
 		return 0, errors.New("missing required fields or tenant/audit info")
 	}
@@ -71,7 +47,7 @@ func (r *sqlitePropertyRepo) Create(ctx context.Context, p *models.Property) (in
 	return res.LastInsertId()
 }
 
-func (r *sqlitePropertyRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.Property, error) {
+func (r *postgresPropertyRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.Property, error) {
 	query := `
 	SELECT id, tenant_id, address, city, zip, listing_date, created_by, created_at, modified_by, last_modified, deleted
 	FROM properties
@@ -103,7 +79,7 @@ func (r *sqlitePropertyRepo) GetByID(ctx context.Context, tenantID string, id in
 	return &p, nil
 }
 
-func (r *sqlitePropertyRepo) ListAll(ctx context.Context, tenantID string) ([]*models.Property, error) {
+func (r *postgresPropertyRepo) ListAll(ctx context.Context, tenantID string) ([]*models.Property, error) {
 	query := `
 	SELECT id, tenant_id, address, city, zip, listing_date, created_by, created_at, modified_by, last_modified, deleted
 	FROM properties
@@ -139,7 +115,7 @@ func (r *sqlitePropertyRepo) ListAll(ctx context.Context, tenantID string) ([]*m
 	return out, nil
 }
 
-func (r *sqlitePropertyRepo) Update(ctx context.Context, p *models.Property) error {
+func (r *postgresPropertyRepo) Update(ctx context.Context, p *models.Property) error {
 	existing, err := r.GetByID(ctx, p.TenantID, p.ID)
 	if err != nil {
 		return err
@@ -168,7 +144,7 @@ func (r *sqlitePropertyRepo) Update(ctx context.Context, p *models.Property) err
 	return err
 }
 
-func (r *sqlitePropertyRepo) Delete(ctx context.Context, tenantID string, id int64) error {
+func (r *postgresPropertyRepo) Delete(ctx context.Context, tenantID string, id int64) error {
 	existing, err := r.GetByID(ctx, tenantID, id)
 	if err != nil {
 		return err
@@ -191,7 +167,7 @@ func (r *sqlitePropertyRepo) Delete(ctx context.Context, tenantID string, id int
 }
 
 // SummarizeTopProperties sums all payments by joining installments → payments → properties.
-func (r *sqlitePropertyRepo) SummarizeTopProperties(ctx context.Context, tenantID string) ([]models.PropertyPaymentVolume, error) {
+func (r *postgresPropertyRepo) SummarizeTopProperties(ctx context.Context, tenantID string) ([]models.PropertyPaymentVolume, error) {
 	query := `
         SELECT p.id            AS property_id,
                SUM(pay.amount) AS total_paid

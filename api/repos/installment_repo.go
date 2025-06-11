@@ -22,8 +22,6 @@ func NewDBInstallmentRepo(db *sql.DB, driver string) InstallmentRepo {
 	switch driver {
 	case "postgres":
 		return &postgresInstallmentRepo{db: db}
-	case "oracle":
-		return &oracleInstallmentRepo{db: db}
 	case "sqlite":
 		return &sqliteInstallmentRepo{db: db}
 	default:

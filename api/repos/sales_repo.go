@@ -27,8 +27,6 @@ func NewDBSalesRepo(db *sql.DB, driver string) SalesRepo {
 	switch driver {
 	case "postgres":
 		return &postgresSalesRepo{db: db}
-	case "oracle":
-		return &oracleSalesRepo{db: db}
 	case "sqlite":
 		return &sqliteSalesRepo{db: db}
 	default:

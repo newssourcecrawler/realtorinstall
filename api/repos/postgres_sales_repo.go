@@ -4,47 +4,24 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
 
-type sqliteSalesRepo struct {
+// postgresSalesRepo implements SalesRepo for Postgres.
+type postgresSalesRepo struct {
 	db *sql.DB
 }
 
-func NewSQLiteSalesRepo(dbPath string) (SalesRepo, error) {
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return nil, err
-	}
-	schema := `
-	CREATE TABLE IF NOT EXISTS sales (
-	  id            INTEGER PRIMARY KEY AUTOINCREMENT,
-	  tenant_id     TEXT    NOT NULL,
-	  property_id   INTEGER NOT NULL,
-	  buyer_id      INTEGER NOT NULL,
-	  sale_price    REAL    NOT NULL,
-	  sale_date     DATETIME NOT NULL,
-	  sale_type     TEXT    NOT NULL,
-	  created_by    TEXT    NOT NULL,
-	  created_at    DATETIME NOT NULL,
-	  modified_by   TEXT    NOT NULL,
-	  last_modified DATETIME NOT NULL,
-	  deleted       INTEGER NOT NULL DEFAULT 0
-	);
-	CREATE INDEX IF NOT EXISTS idx_sales_tenant     ON sales(tenant_id);
-	CREATE INDEX IF NOT EXISTS idx_sales_property   ON sales(property_id);
-	CREATE INDEX IF NOT EXISTS idx_sales_buyer      ON sales(buyer_id);
-	`
-	if _, err := db.Exec(schema); err != nil {
-		return nil, err
-	}
-	return &sqliteSalesRepo{db: db}, nil
+// NewPostgresSalesRepo returns a SalesRepo backed by the given *sql.DB.
+func NewPostgresSalesRepo(db *sql.DB) SalesRepo {
+	return &postgresSalesRepo{db: db}
 }
 
-func (r *sqliteSalesRepo) Create(ctx context.Context, s *models.Sales) (int64, error) {
+func (r *postgresSalesRepo) Create(ctx context.Context, s *models.Sales) (int64, error) {
 	if s.TenantID == "" || s.PropertyID == 0 || s.BuyerID == 0 ||
 		s.SalePrice <= 0 || s.SaleType == "" ||
 		s.CreatedBy == "" || s.ModifiedBy == "" {
@@ -55,30 +32,27 @@ func (r *sqliteSalesRepo) Create(ctx context.Context, s *models.Sales) (int64, e
 	s.LastModified = now
 
 	query := `
-	INSERT INTO sales (
-	  tenant_id, property_id, buyer_id, sale_price, sale_date, sale_type,
-	  created_by, created_at, modified_by, last_modified, deleted
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0);
-	`
-	res, err := r.db.ExecContext(ctx, query,
-		s.TenantID,
-		s.PropertyID,
-		s.BuyerID,
-		s.SalePrice,
-		s.SaleDate,
-		s.SaleType,
-		s.CreatedBy,
-		s.CreatedAt,
-		s.ModifiedBy,
-		s.LastModified,
-	)
+    INSERT INTO sales (
+      tenant_id, property_id, buyer_id, sale_price, sale_date, sale_type,
+      created_by, created_at, modified_by, last_modified, deleted
+    ) VALUES (
+      $1,$2,$3,$4,$5,$6,
+      $7,$8,$9,$10,FALSE
+    ) RETURNING id
+    `
+	var newID int64
+	err := r.db.QueryRowContext(ctx, query,
+		s.TenantID, s.PropertyID, s.BuyerID,
+		s.SalePrice, s.SaleDate, s.SaleType,
+		s.CreatedBy, s.CreatedAt, s.ModifiedBy, s.LastModified,
+	).Scan(&newID)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("postgres Create sale: %w", err)
 	}
-	return res.LastInsertId()
+	return newID, nil
 }
 
-func (r *sqliteSalesRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.Sales, error) {
+func (r *postgresSalesRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.Sales, error) {
 	query := `
 	SELECT id, tenant_id, property_id, buyer_id, sale_price, sale_date, sale_type,
 	       created_by, created_at, modified_by, last_modified, deleted
@@ -113,7 +87,7 @@ func (r *sqliteSalesRepo) GetByID(ctx context.Context, tenantID string, id int64
 	return &s, nil
 }
 
-func (r *sqliteSalesRepo) ListAll(ctx context.Context, tenantID string) ([]*models.Sales, error) {
+func (r *postgresSalesRepo) ListAll(ctx context.Context, tenantID string) ([]*models.Sales, error) {
 	query := `
 	SELECT id, tenant_id, property_id, buyer_id, sale_price, sale_date, sale_type,
 	       created_by, created_at, modified_by, last_modified, deleted
@@ -152,7 +126,7 @@ func (r *sqliteSalesRepo) ListAll(ctx context.Context, tenantID string) ([]*mode
 	return out, nil
 }
 
-func (r *sqliteSalesRepo) Update(ctx context.Context, s *models.Sales) error {
+func (r *postgresSalesRepo) Update(ctx context.Context, s *models.Sales) error {
 	existing, err := r.GetByID(ctx, s.TenantID, s.ID)
 	if err != nil {
 		return err
@@ -184,7 +158,7 @@ func (r *sqliteSalesRepo) Update(ctx context.Context, s *models.Sales) error {
 	return err
 }
 
-func (r *sqliteSalesRepo) Delete(ctx context.Context, tenantID string, id int64) error {
+func (r *postgresSalesRepo) Delete(ctx context.Context, tenantID string, id int64) error {
 	existing, err := r.GetByID(ctx, tenantID, id)
 	if err != nil {
 		return err
@@ -231,7 +205,7 @@ func (r *sqliteCommissionRepo) SummarizeByBeneficiary(ctx context.Context, tenan
 }
 
 // SummarizeByMonth returns sum of sale_price per month (YYYY‐MM).
-func (r *sqliteSalesRepo) SummarizeByMonth(ctx context.Context, tenantID string) ([]models.MonthSales, error) {
+func (r *postgresSalesRepo) SummarizeByMonth(ctx context.Context, tenantID string) ([]models.MonthSales, error) {
 	query := `
         SELECT strftime('%Y-%m', sale_date) AS month,
                SUM(sale_price)       AS total_sales

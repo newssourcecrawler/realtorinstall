@@ -1,4 +1,3 @@
-// api/repos/sqlite_buyer_repo.go
 package repos
 
 import (
@@ -7,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
 
@@ -15,34 +14,11 @@ type postgresBuyerRepo struct {
 	db *sql.DB
 }
 
-func NewSQLiteBuyerRepo(dbPath string) (BuyerRepo, error) {
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return nil, err
-	}
-	schema := `
-	CREATE TABLE IF NOT EXISTS buyers (
-	  id INTEGER PRIMARY KEY AUTOINCREMENT,
-	  tenant_id TEXT NOT NULL,
-	  first_name TEXT NOT NULL,
-	  last_name TEXT NOT NULL,
-	  email TEXT NOT NULL,
-	  phone TEXT,
-	  created_by TEXT NOT NULL,
-	  created_at DATETIME NOT NULL,
-	  modified_by TEXT NOT NULL,
-	  last_modified DATETIME NOT NULL,
-	  deleted INTEGER NOT NULL DEFAULT 0
-	);
-	CREATE INDEX IF NOT EXISTS idx_buyers_tenant ON buyers(tenant_id);
-	`
-	if _, err := db.Exec(schema); err != nil {
-		return nil, err
-	}
-	return &sqliteBuyerRepo{db: db}, nil
+func NewPostgresBuyerRepo(db *sql.DB) BuyerRepo {
+	return &postgresBuyerRepo{db: db}
 }
 
-func (r *sqliteBuyerRepo) Create(ctx context.Context, b *models.Buyer) (int64, error) {
+func (r *postgresBuyerRepo) Create(ctx context.Context, b *models.Buyer) (int64, error) {
 	if b.TenantID == "" || b.FirstName == "" || b.LastName == "" || b.Email == "" || b.CreatedBy == "" || b.ModifiedBy == "" {
 		return 0, errors.New("missing required fields or tenant/audit info")
 	}
@@ -71,7 +47,7 @@ func (r *sqliteBuyerRepo) Create(ctx context.Context, b *models.Buyer) (int64, e
 	return res.LastInsertId()
 }
 
-func (r *sqliteBuyerRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.Buyer, error) {
+func (r *postgresBuyerRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.Buyer, error) {
 	query := `
 	SELECT id, tenant_id, first_name, last_name, email, phone, created_by, created_at, modified_by, last_modified, deleted
 	FROM buyers
@@ -103,7 +79,7 @@ func (r *sqliteBuyerRepo) GetByID(ctx context.Context, tenantID string, id int64
 	return &b, nil
 }
 
-func (r *sqliteBuyerRepo) ListAll(ctx context.Context, tenantID string) ([]*models.Buyer, error) {
+func (r *postgresBuyerRepo) ListAll(ctx context.Context, tenantID string) ([]*models.Buyer, error) {
 	query := `
 	SELECT id, tenant_id, first_name, last_name, email, phone, created_by, created_at, modified_by, last_modified, deleted
 	FROM buyers
@@ -139,7 +115,7 @@ func (r *sqliteBuyerRepo) ListAll(ctx context.Context, tenantID string) ([]*mode
 	return out, nil
 }
 
-func (r *sqliteBuyerRepo) Update(ctx context.Context, b *models.Buyer) error {
+func (r *postgresBuyerRepo) Update(ctx context.Context, b *models.Buyer) error {
 	existing, err := r.GetByID(ctx, b.TenantID, b.ID)
 	if err != nil {
 		return err
@@ -168,7 +144,7 @@ func (r *sqliteBuyerRepo) Update(ctx context.Context, b *models.Buyer) error {
 	return err
 }
 
-func (r *sqliteBuyerRepo) Delete(ctx context.Context, tenantID string, id int64) error {
+func (r *postgresBuyerRepo) Delete(ctx context.Context, tenantID string, id int64) error {
 	existing, err := r.GetByID(ctx, tenantID, id)
 	if err != nil {
 		return err

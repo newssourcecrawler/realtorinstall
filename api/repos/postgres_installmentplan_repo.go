@@ -1,5 +1,3 @@
-// api/repos/sqlite_installmentplan_repo.go
-
 package repos
 
 import (
@@ -8,47 +6,19 @@ import (
 	"errors"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
 
-type sqliteInstallmentPlanRepo struct {
+type postgresInstallmentPlanRepo struct {
 	db *sql.DB
 }
 
-func NewSQLiteInstallmentPlanRepo(dbPath string) (InstallmentPlanRepo, error) {
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return nil, err
-	}
-	schema := `
-	CREATE TABLE IF NOT EXISTS installment_plans (
-	  id INTEGER PRIMARY KEY AUTOINCREMENT,
-	  tenant_id TEXT NOT NULL,
-	  property_id INTEGER NOT NULL,
-	  buyer_id INTEGER NOT NULL,
-	  total_price REAL NOT NULL,
-	  down_payment REAL NOT NULL,
-	  num_installments INTEGER NOT NULL,
-	  frequency TEXT NOT NULL,
-	  first_installment DATETIME NOT NULL,
-	  interest_rate REAL NOT NULL,
-	  created_by TEXT NOT NULL,
-	  created_at DATETIME NOT NULL,
-	  modified_by TEXT NOT NULL,
-	  last_modified DATETIME NOT NULL,
-	  deleted INTEGER NOT NULL DEFAULT 0
-	);
-	CREATE INDEX IF NOT EXISTS idx_installmentplans_tenant ON installment_plans(tenant_id);
-	CREATE INDEX IF NOT EXISTS idx_installmentplans_property ON installment_plans(property_id);
-	`
-	if _, err := db.Exec(schema); err != nil {
-		return nil, err
-	}
-	return &sqliteInstallmentPlanRepo{db: db}, nil
+func NewPostgresInstallmentPlanRepo(db *sql.DB) InstallmentPlanRepo {
+	return &postgresInstallmentPlanRepo{db: db}
 }
 
-func (r *sqliteInstallmentPlanRepo) Create(ctx context.Context, p *models.InstallmentPlan) (int64, error) {
+func (r *postgresInstallmentPlanRepo) Create(ctx context.Context, p *models.InstallmentPlan) (int64, error) {
 	if p.TenantID == "" || p.PropertyID == 0 || p.BuyerID == 0 || p.CreatedBy == "" || p.ModifiedBy == "" {
 		return 0, errors.New("missing required fields or tenant/audit info")
 	}
@@ -83,7 +53,7 @@ func (r *sqliteInstallmentPlanRepo) Create(ctx context.Context, p *models.Instal
 	return res.LastInsertId()
 }
 
-func (r *sqliteInstallmentPlanRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.InstallmentPlan, error) {
+func (r *postgresInstallmentPlanRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.InstallmentPlan, error) {
 	query := `
 	SELECT id, tenant_id, property_id, buyer_id, total_price, down_payment, num_installments, frequency, first_installment, interest_rate,
 	       created_by, created_at, modified_by, last_modified, deleted
@@ -121,7 +91,7 @@ func (r *sqliteInstallmentPlanRepo) GetByID(ctx context.Context, tenantID string
 	return &p, nil
 }
 
-func (r *sqliteInstallmentPlanRepo) ListAll(ctx context.Context, tenantID string) ([]*models.InstallmentPlan, error) {
+func (r *postgresInstallmentPlanRepo) ListAll(ctx context.Context, tenantID string) ([]*models.InstallmentPlan, error) {
 	query := `
 	SELECT id, tenant_id, property_id, buyer_id, total_price, down_payment, num_installments, frequency, first_installment, interest_rate,
 	       created_by, created_at, modified_by, last_modified, deleted
@@ -163,7 +133,7 @@ func (r *sqliteInstallmentPlanRepo) ListAll(ctx context.Context, tenantID string
 	return out, nil
 }
 
-func (r *sqliteInstallmentPlanRepo) ListByPlan(ctx context.Context, tenantID string, planID int64) ([]*models.InstallmentPlan, error) {
+func (r *postgresInstallmentPlanRepo) ListByPlan(ctx context.Context, tenantID string, planID int64) ([]*models.InstallmentPlan, error) {
 	query := `
 	SELECT id, tenant_id, property_id, buyer_id, total_price, down_payment, num_installments, frequency, first_installment, interest_rate,
 	       created_by, created_at, modified_by, last_modified, deleted
@@ -205,7 +175,7 @@ func (r *sqliteInstallmentPlanRepo) ListByPlan(ctx context.Context, tenantID str
 	return out, nil
 }
 
-func (r *sqliteInstallmentPlanRepo) Update(ctx context.Context, p *models.InstallmentPlan) error {
+func (r *postgresInstallmentPlanRepo) Update(ctx context.Context, p *models.InstallmentPlan) error {
 	existing, err := r.GetByID(ctx, p.TenantID, p.ID)
 	if err != nil {
 		return err
@@ -240,7 +210,7 @@ func (r *sqliteInstallmentPlanRepo) Update(ctx context.Context, p *models.Instal
 	return err
 }
 
-func (r *sqliteInstallmentPlanRepo) Delete(ctx context.Context, tenantID string, id int64) error {
+func (r *postgresInstallmentPlanRepo) Delete(ctx context.Context, tenantID string, id int64) error {
 	existing, err := r.GetByID(ctx, tenantID, id)
 	if err != nil {
 		return err
@@ -270,7 +240,7 @@ func boolToInt(b bool) int {
 }
 
 // SummarizeByPlan computes “amount_due − amount_paid” grouped by each plan.
-func (r *sqliteInstallmentPlanRepo) SummarizeByPlan(ctx context.Context, tenantID string) ([]models.PlanSummary, error) {
+func (r *postgresInstallmentPlanRepo) SummarizeByPlan(ctx context.Context, tenantID string) ([]models.PlanSummary, error) {
 	query := `
         SELECT plan_id, 
             SUM(amount_due - amount_paid) AS total_outstanding

@@ -28,8 +28,6 @@ func NewDBPropertyRepo(db *sql.DB, driver string) PropertyRepo {
 	switch driver {
 	case "postgres":
 		return &postgresPropertyRepo{db: db}
-	case "oracle":
-		return &oraclePropertyRepo{db: db}
 	case "sqlite":
 		return &sqlitePropertyRepo{db: db}
 	default:

@@ -6,48 +6,19 @@ import (
 	"errors"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
 
-type sqliteLettingsRepo struct {
+type postgresLettingsRepo struct {
 	db *sql.DB
 }
 
-func NewSQLiteLettingsRepo(dbPath string) (LettingsRepo, error) {
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return nil, err
-	}
-	schema := `
-	CREATE TABLE IF NOT EXISTS lettings (
-	  id             INTEGER PRIMARY KEY AUTOINCREMENT,
-	  tenant_id      TEXT    NOT NULL,
-	  property_id    INTEGER NOT NULL,
-	  tenant_user_id INTEGER NOT NULL,
-	  rent_amount    REAL    NOT NULL,
-	  rent_term      INTEGER NOT NULL,
-	  rent_cycle     TEXT    NOT NULL,
-	  memo           TEXT,
-	  start_date     DATETIME NOT NULL,
-	  end_date       DATETIME,
-	  created_by     TEXT    NOT NULL,
-	  created_at     DATETIME NOT NULL,
-	  modified_by    TEXT    NOT NULL,
-	  last_modified  DATETIME NOT NULL,
-	  deleted        INTEGER NOT NULL DEFAULT 0
-	);
-	CREATE INDEX IF NOT EXISTS idx_lettings_tenant    ON lettings(tenant_id);
-	CREATE INDEX IF NOT EXISTS idx_lettings_property  ON lettings(property_id);
-	CREATE INDEX IF NOT EXISTS idx_lettings_tenantuser ON lettings(tenant_user_id);
-	`
-	if _, err := db.Exec(schema); err != nil {
-		return nil, err
-	}
-	return &sqliteLettingsRepo{db: db}, nil
+func NewPostgresLettingsRepo(db *sql.DB) LettingsRepo {
+	return &postgresLettingsRepo{db: db}
 }
 
-func (r *sqliteLettingsRepo) Create(ctx context.Context, lt *models.Lettings) (int64, error) {
+func (r *postgresLettingsRepo) Create(ctx context.Context, lt *models.Lettings) (int64, error) {
 	if lt.TenantID == "" ||
 		lt.PropertyID == 0 ||
 		lt.TenantUserID == 0 ||
@@ -90,7 +61,7 @@ func (r *sqliteLettingsRepo) Create(ctx context.Context, lt *models.Lettings) (i
 	return res.LastInsertId()
 }
 
-func (r *sqliteLettingsRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.Lettings, error) {
+func (r *postgresLettingsRepo) GetByID(ctx context.Context, tenantID string, id int64) (*models.Lettings, error) {
 	query := `
 	SELECT id, tenant_id, property_id, tenant_user_id, rent_amount, rent_term, rent_cycle, memo, start_date, end_date,
 	       created_by, created_at, modified_by, last_modified, deleted
@@ -128,7 +99,7 @@ func (r *sqliteLettingsRepo) GetByID(ctx context.Context, tenantID string, id in
 	return &lt, nil
 }
 
-func (r *sqliteLettingsRepo) ListAll(ctx context.Context, tenantID string) ([]*models.Lettings, error) {
+func (r *postgresLettingsRepo) ListAll(ctx context.Context, tenantID string) ([]*models.Lettings, error) {
 	query := `
 	SELECT id, tenant_id, property_id, tenant_user_id, rent_amount, rent_term, rent_cycle, memo, start_date, end_date,
 	       created_by, created_at, modified_by, last_modified, deleted
@@ -170,7 +141,7 @@ func (r *sqliteLettingsRepo) ListAll(ctx context.Context, tenantID string) ([]*m
 	return out, nil
 }
 
-func (r *sqliteLettingsRepo) Update(ctx context.Context, lt *models.Lettings) error {
+func (r *postgresLettingsRepo) Update(ctx context.Context, lt *models.Lettings) error {
 	existing, err := r.GetByID(ctx, lt.TenantID, lt.ID)
 	if err != nil {
 		return err
@@ -205,7 +176,7 @@ func (r *sqliteLettingsRepo) Update(ctx context.Context, lt *models.Lettings) er
 	return err
 }
 
-func (r *sqliteLettingsRepo) Delete(ctx context.Context, lt *models.Lettings) error {
+func (r *postgresLettingsRepo) Delete(ctx context.Context, lt *models.Lettings) error {
 	existing, err := r.GetByID(ctx, lt.TenantID, lt.ID)
 	if err != nil {
 		return err
@@ -228,7 +199,7 @@ func (r *sqliteLettingsRepo) Delete(ctx context.Context, lt *models.Lettings) er
 }
 
 // SummarizeRentRoll sums rent_amount for all “currently active” lettings.
-func (r *sqliteLettingsRepo) SummarizeRentRoll(ctx context.Context, tenantID string) ([]models.RentRoll, error) {
+func (r *postgresLettingsRepo) SummarizeRentRoll(ctx context.Context, tenantID string) ([]models.RentRoll, error) {
 	query := `
         SELECT property_id, SUM(rent_amount) AS total_rent
           FROM lettings

@@ -17,14 +17,12 @@ type LocationPricingRepo interface {
 }
 
 // NewDBLocationRepo selects the concrete implementation based on driver.
-func NewDBLocationRepo(db *sql.DB, driver string) LocationRepo {
+func NewDBLocationRepo(db *sql.DB, driver string) LocationPricingRepo {
 	switch driver {
 	case "postgres":
-		return &postgresLocationRepo{db: db}
-	case "oracle":
-		return &oracleLocationRepo{db: db}
+		return &postgresLocationPricingRepo{db: db}
 	case "sqlite":
-		return &sqliteLocationRepo{db: db}
+		return &sqliteLocationPricingRepo{db: db}
 	default:
 		panic("unsupported driver: " + driver)
 	}
