@@ -65,186 +65,29 @@ func main() {
 		{cfg.UserRoleDBDriver, cfg.UserRoleDBDSN, "userroles", nil},
 	}
 
-	// 1. Open per-domain DBs
-	/*
-		userDB, err := db.Open(db.Config{Driver: cfg.UserDBDriver, DSN: cfg.UserDBDSN})
-		salesDB, err := db.Open(db.Config{Driver: cfg.SalesDBDriver, DSN: cfg.SalesDBDSN})
-		commissionDB, err := db.Open(db.Config{Driver: cfg.CommissionDBDriver, DSN: cfg.CommissionDBDSN})
-		propDB, err := db.Open(db.Config{Driver: cfg.PropertyDBDriver, DSN: cfg.PropertyDBDSN})
-		pricingDB, err := db.Open(db.Config{Driver: cfg.PricingDBDriver, DSN: cfg.PricingDBDSN})
-		buyerDB, err := db.Open(db.Config{Driver: cfg./BuyerDBDriver, DSN: cfg.BuyerDBDSN})
-		planDB, err := db.Open(db.Config{Driver: cfg.PlanDBDriver, DSN: cfg.PlanDBDSN})
-		instDB, err := db.Open(db.Config{Driver: cfg.InstDBDriver, DSN: cfg.InstDBDSN})
-		payDB, err := db.Open(db.Config{Driver: cfg.PayDBDriver, DSN: cfg.PayDBDSN})
-		introDB, err := db.Open(db.Config{Driver: cfg.IntroDBDriver, DSN: cfg.IntroDBDSN})
-		lettingsDB, err := db.Open(db.Config{Driver: cfg.LettingsDBDriver, DSN: cfg.LettingsDBDSN})
-		permDB, err := db.Open(db.Config{Driver: cfg.PermissionDBDriver, DSN: cfg.PermissionDBDSB})
-		rolepermissionDB, err := db.Open(db.Config{Driver: cfg.RolPermissioneDBDriver, DSN: cfg.RolePermissionDBDSN})
-		userroleDB, err := db.Open(db.Config{Driver: cfg.UserRoleDBDriver, DSN: cfg.UserRoleDBDSN})
-
-		// 2. Migrate if SQLite
-		if cfg.UserDBDriver == "sqlite" {
-			migrate.MigrateSQLite(conn, "./migrations/users")
+	for i := range domains {
+		d := &domains[i]
+		d.dB, err = db.Open(db.Config{Driver: d.driver, DSN: d.dsn})
+		if err != nil {
+			log.Fatalf("Failed to open %s DB: %v", d.domainName, err)
 		}
-		if cfg.SalesDBDriver == "sqlite" {
-			migrate.MigrateSQLite(conn, "./migrations/sales")
-		}
-		if cfg.CommissionDBDriver == "sqlite" {
-			migrate.MigrateSQLite(conn, "./migrations/commissions")
-		}
-		if cfg.PropertyDBDriver == "sqlite" {
-			migrate.MigrateSQLite(conn, "./migrations/property")
-		}
-		if cfg.BuyerDBDriver == "sqlite" {
-			migrate.MigrateSQLite(conn, "./migrations/buyer")
-		}
-		if cfg.PlanDBDriver == "sqlite" {
-			migrate.MigrateSQLite(conn, "./migrations/plans")
-		}
-		if cfg.InstDBDriver == "sqlite" {
-			migrate.MigrateSQLite(conn, "./migrations/installments")
-		}
-		if cfg.LettingsDBDriver == "sqlite" {
-			migrate.MigrateSQLite(conn, "./migrations/lettings")
-		}
-		if cfg.PermissionDBDriver == "sqlite" {
-			migrate.MigrateSQLite(conn, "./migrations/permissions")
-		}
-		if cfg.RolPermissioneDBDriver == "sqlite" {
-			migrate.MigrateSQLite(conn, "./migrations/rolepermissions")
-		}
-		if cfg.BuyerDBDriver == "sqlite" {
-			migrate.MigrateSQLite(conn, "./migrations/buyer")
-		}
-		if cfg.UserRoleDBDriver == "sqlite" {
-			migrate.MigrateSQLite(conn, "./migrations/userrole")
-		}
-
-		// Build repos
-		roleRepo := repos.NewDBRoleRepo(conn, cfg.RoleDBDriver)
-		permRepo := repos.NewDBPermissionRepo(conn, cfg.PermissionDBDriver)
-		rolePermRepo := repos.NewDBRolePermissionRepo(conn, cfg.RolePermissionDBDriver)
-		userRoleRepo := repos.NewDBUserRoleRepo(conn, cfg.UserRoleDBDriver)
-		userRepo  := repos.NewDBUserRepo(userDB, cfg.UserDBDriver)
-		salesRepo := repos.NewDBSalesRepo(salesDB, cfg.SalesDBDriver)
-		commissionRepo := repos.NewDBCommissionRepo(conn, cfg.CommissionDBDriver)
-		propRepo := repos.NewDBPermissionRepo(conn, cfg.PropertyDBDriver)
-		pricingRepo := repos.NewDBRolePermissionRepo(conn, cfg.PricingDBDriver)
-		buyerRepo := repos.NewDBUserRoleRepo(conn, cfg.BuyerDBDriver)
-		planRepo  := repos.NewDBUserRepo(userDB, cfg.PlanDBDriver)
-		instRepo := repos.NewDBSalesRepo(salesDB, cfg.InstDBDriver)
-		payRepo  := repos.NewDBUserRepo(userDB, cfg.PayDBDriver)
-		introRepo := repos.NewDBSalesRepo(salesDB, cfg.IntroDBDriver)
-		lettingsRepo := repos.NewDBCommissionRepo(conn, cfg.LettingsDBDriver)
-
-		/*
-		// For Sales domain:
-		salesCfg := db.LoadConfigPrefix("SALES_")
-		salesDB, _ := db.Open(salesCfg)
-		if salesCfg.Driver == "sqlite" {
-			if err := migrate.MigrateSQLite(salesDB, "./migrations/sales"); err != nil {
-				log.Fatalf("Sales migrations failed: %v", err)
+		// Run migrations for SQLite and Postgres
+		if d.driver == "sqlite" || d.driver == "postgres" {
+			migDir := fmt.Sprintf("./migrations/%s", d.domainName)
+			if err := migrate.MigrateSQLite(d.dB, migDir); err != nil {
+				log.Fatalf("Migrations failed for %s: %v", d.domainName, err)
 			}
 		}
-
-		userCfg := db.LoadConfigPrefix("USER_")
-		userDB, err := db.Open(db.Config{Driver: cfg.UserDBDriver, DSN: cfg.UserDBDSN})
-		if userCfg.Driver == "sqlite" {
-			// run all your .sql files in migrations/users
-			if err := migrate.MigrateSQLite(userDB, "./migrations/users"); err != nil {
-				log.Fatalf("Users migrations failed: %v", err)
+	})
+		if err != nil {
+			log.Fatalf("Failed to open %s DB: %v", d.domainName, err)
+		}
+		if d.driver == "sqlite" {
+			if err := migrate.MigrateSQLite(d.dB, fmt.Sprintf("./migrations/%s", d.domainName)); err != nil {
+				log.Fatalf("Migrations failed for %s: %v", d.domainName, err)
 			}
 		}
-
-		commissionCfg := db.LoadConfigPrefix("COMMISSION_")
-		commissionDB, _ := db.Open(commissionCfg)
-		if commissionCfg.Driver == "sqlite" {
-			if err := migrate.MigrateSQLite(commissionDB, "./migrations/commissions"); err != nil {
-				log.Fatalf("Commissions migrations failed: %v", err)
-			}
-		}
-
-		propCfg := db.LoadConfigPrefix("PROPERTY_")
-		propDB, _ := db.Open(propCfg)
-		if propDB.Driver == "sqlite" {
-			if err := migrate.MigrateSQLite(propDB, "./migrations/property"); err != nil {
-				log.Fatalf("Property migrations failed: %v", err)
-			}
-		}
-
-		pricingCfg := db.LoadConfigPrefix("PRICING_")
-		pricingDB, _ := db.Open(pricingCfg)
-		if pricingCfg.Driver == "sqlite" {
-			if err := migrate.MigrateSQLite(pricingDB, "./migrations/pricing"); err != nil {
-				log.Fatalf("Pricing migrations failed: %v", err)
-			}
-		}
-
-		buyerCfg := db.LoadConfigPrefix("BUYER_")
-		buyerDB, _ := db.Open(buyerCfg)
-		if buyerCfg.Driver == "sqlite" {
-			if err := migrate.MigrateSQLite(buyerDB, "./migrations/buyer"); err != nil {
-				log.Fatalf("Buyer migrations failed: %v", err)
-			}
-		}
-
-		planCfg := db.LoadConfigPrefix("PLAN_")
-		planDB, _ := db.Open(planCfg)
-		if planCfg.Driver == "sqlite" {
-			if err := migrate.MigrateSQLite(planDB, "./migrations/plan"); err != nil {
-				log.Fatalf("Installment plan migrations failed: %v", err)
-			}
-		}
-
-		instCfg := db.LoadConfigPrefix("INSTALLMENTS_")
-		instDB, _ := db.Open(instCfg)
-		if instCfg.Driver == "sqlite" {
-			if err := migrate.MigrateSQLite(instDB, "./migrations/installments"); err != nil {
-				log.Fatalf("Installments migrations failed: %v", err)
-			}
-		}
-
-		payCfg := db.LoadConfigPrefix("PAYMENTS_")
-		payDB, _ := db.Open(payCfg)
-		if payCfg.Driver == "sqlite" {
-			if err := migrate.MigrateSQLite(payDB, "./migrations/payments"); err != nil {
-				log.Fatalf("Payments migrations failed: %v", err)
-			}
-		}
-
-		introCfg := db.LoadConfigPrefix("INTRODUCTIONS_")
-		introDB, _ := db.Open(introCfg)
-		if introCfg.Driver == "sqlite" {
-			if err := migrate.MigrateSQLite(introDB, "./migrations/introductions"); err != nil {
-				log.Fatalf("Introductions migrations failed: %v", err)
-			}
-		}
-
-		lettingsCfg := db.LoadConfigPrefix("LETTINGS_")
-		lettingsDB, _ := db.Open(lettingsCfg)
-		if lettingsCfg.Driver == "sqlite" {
-			if err := migrate.MigrateSQLite(lettingsDB, "./migrations/lettings"); err != nil {
-				log.Fatalf("Lettings migrations failed: %v", err)
-			}
-		}
-
-		salesRepo := repos.NewDBSalesRepo(salesDB, salesCfg.Driver)
-		userRepo := apiRepos.NewDBUserRepo(conn, userCfg.Driver)
-
-
-		// 2. Initialize repositories (one per domain)
-		//userRepo, _ := apiRepos.NewDBUserRepo(conn, cfg.Driver)
-		commissionRepo := apiRepos.NewDBCommissionsRepo(conn, commissionCfg.Driver)
-		propRepo := apiRepos.NewDBPropertyRepo(conn, propCfg.Driver)
-		pricingRepo := apiRepos.NewDBLocationPricingRepo(conn, pricingCfg.Driver)
-		buyerRepo := apiRepos.NewDBBuyersRepo(conn, buyerCfg.Driver)
-		planRepo := apiRepos.NewDBInstallmentPlansPlanRepo(conn, planCfg.Driver)
-		instRepo := apiRepos.NewDBInstallmentsRepo(conn, instCfg.Driver)
-		payRepo := apiRepos.NewDBPaymentRepo(conn, payCfg.Driver)
-		//salesRepo, _ := apiRepos.NewSQLdbSalesRepo(conn, cfg.Driver)
-		introRepo := apiRepos.NewDBIntroductionsRepo(conn, introCfg.Driver)
-		lettingsRepo := apiRepos.NewDBLettingsRepo(conn, lettingsCfg.Driver)
-	*/
+	}
 
 	// Construct repository instances using the opened DBs
 	userRepo := repos.NewDBUserRepo(domains[0].dB, domains[0].driver)
