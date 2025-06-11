@@ -2,6 +2,7 @@ package repos
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
@@ -22,7 +23,7 @@ type RentRoll struct {
 	TotalRent  float64 `json:"total_rent"`
 }
 
-/ NewDBLettingsRepo selects the concrete implementation based on driver.
+// NewDBLettingsRepo selects the concrete implementation based on driver.
 func NewDBLettingsRepo(db *sql.DB, driver string) LettingsRepo {
 	switch driver {
 	case "postgres":

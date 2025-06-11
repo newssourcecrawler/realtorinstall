@@ -2,6 +2,7 @@ package repos
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
@@ -16,7 +17,7 @@ type CommissionRepo interface {
 	GetCommissionDetailsForBeneficiary(ctx context.Context, tenantID string, beneficiaryID int64) ([]*models.Commission, error)
 }
 
-/ NewDBCommissionRepo selects the concrete implementation based on driver.
+// NewDBCommissionRepo selects the concrete implementation based on driver.
 func NewDBCommissionRepo(db *sql.DB, driver string) CommissionRepo {
 	switch driver {
 	case "postgres":

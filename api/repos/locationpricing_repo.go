@@ -2,6 +2,7 @@ package repos
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
@@ -15,7 +16,7 @@ type LocationPricingRepo interface {
 	Delete(ctx context.Context, tenantID string, id int64) error
 }
 
-/ NewDBLocationRepo selects the concrete implementation based on driver.
+// NewDBLocationRepo selects the concrete implementation based on driver.
 func NewDBLocationRepo(db *sql.DB, driver string) LocationRepo {
 	switch driver {
 	case "postgres":

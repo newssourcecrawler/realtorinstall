@@ -11,7 +11,7 @@ import (
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
 
-type sqliteBuyerRepo struct {
+type postgresBuyerRepo struct {
 	db *sql.DB
 }
 

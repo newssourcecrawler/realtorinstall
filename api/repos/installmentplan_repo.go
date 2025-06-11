@@ -2,6 +2,7 @@ package repos
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
@@ -23,7 +24,7 @@ type PlanSummary struct {
 	TotalOutstanding float64 `json:"total_outstanding"`
 }
 
-/ NewDBInstallmentPlanRepo selects the concrete implementation based on driver.
+// NewDBInstallmentPlanRepo selects the concrete implementation based on driver.
 func NewDBInstallmentPlanRepo(db *sql.DB, driver string) InstallmentPlanRepo {
 	switch driver {
 	case "postgres":

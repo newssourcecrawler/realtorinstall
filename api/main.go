@@ -21,11 +21,12 @@ import (
 	"github.com/360EntSecGroup-Skylar/excelize"
 
 	"github.com/newssourcecrawler/realtorinstall/api/handlers"
-	"github.com/newssourcecrawler/realtorinstall/api/repos"
 	apiRepos "github.com/newssourcecrawler/realtorinstall/api/repos"
 	apiServices "github.com/newssourcecrawler/realtorinstall/api/services"
 	"github.com/newssourcecrawler/realtorinstall/dbmigrations"
 	"github.com/newssourcecrawler/realtorinstall/internal/config"
+	"github.com/newssourcecrawler/realtorinstall/internal/db"
+	"github.com/newssourcecrawler/realtorinstall/migrate"
 )
 
 func main() {
@@ -71,19 +72,10 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to open %s DB: %v", d.domainName, err)
 		}
-		// Run migrations for SQLite and Postgres
+		// Run migrations for SQL engines (SQLite & Postgres)
 		if d.driver == "sqlite" || d.driver == "postgres" {
 			migDir := fmt.Sprintf("./migrations/%s", d.domainName)
-			if err := migrate.MigrateSQLite(d.dB, migDir); err != nil {
-				log.Fatalf("Migrations failed for %s: %v", d.domainName, err)
-			}
-		}
-	})
-		if err != nil {
-			log.Fatalf("Failed to open %s DB: %v", d.domainName, err)
-		}
-		if d.driver == "sqlite" {
-			if err := migrate.MigrateSQLite(d.dB, fmt.Sprintf("./migrations/%s", d.domainName)); err != nil {
+			if err := migrate.MigrateSQL(d.dB, migDir); err != nil {
 				log.Fatalf("Migrations failed for %s: %v", d.domainName, err)
 			}
 		}

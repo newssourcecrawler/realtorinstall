@@ -2,6 +2,7 @@ package repos
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/newssourcecrawler/realtorinstall/api/models"
 )
@@ -14,13 +15,11 @@ type BuyerRepo interface {
 	Delete(ctx context.Context, tenantID string, id int64) error
 }
 
-/ NewDBBuyerRepo selects the concrete implementation based on driver.
+// NewDBBuyerRepo selects the concrete implementation based on driver.
 func NewDBBuyerRepo(db *sql.DB, driver string) BuyerRepo {
 	switch driver {
 	case "postgres":
 		return &postgresBuyerRepo{db: db}
-	case "oracle":
-		return &oracleBuyerRepo{db: db}
 	case "sqlite":
 		return &sqliteBuyerRepo{db: db}
 	default:

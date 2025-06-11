@@ -9,8 +9,8 @@ import (
 	"strings"
 )
 
-// MigrateSQLite will run every .sql file in dir (in alphabetical order).
-func MigrateSQLite(db *sql.DB, dir string) error {
+// MigrateSQL will run every .sql file in dir (in alphabetical order).
+func MigrateSQL(db *sql.DB, dir string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return fmt.Errorf("reading migrations dir: %w", err)
