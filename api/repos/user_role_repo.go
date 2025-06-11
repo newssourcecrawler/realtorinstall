@@ -23,7 +23,7 @@ func NewDBUserRoleRepo(db *sql.DB, driver string) UserRoleRepo {
 	case "postgres":
 		return NewPostgresUserRoleRepo(db)
 	case "sqlite":
-		return NewSQLiteUserRoleRepo(db),
+		return NewSQLiteUserRoleRepo(db)
 	default:
 		panic("unsupported driver: " + driver)
 	}
