@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 
-	//_ "github.com/godror/godror"    // Oracle driver
 	_ "github.com/lib/pq"           // Postgres driver
 	_ "github.com/mattn/go-sqlite3" // SQLite driver
 )
@@ -37,8 +36,6 @@ func Open(cfg Config) (*sql.DB, error) {
 		return sql.Open("sqlite3", cfg.DSN)
 	case "postgres":
 		return sql.Open("postgres", cfg.DSN)
-	case "oracle":
-		return sql.Open("godror", cfg.DSN)
 	default:
 		return nil, fmt.Errorf("unsupported driver: %s", cfg.Driver)
 	}

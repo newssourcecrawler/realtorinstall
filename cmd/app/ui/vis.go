@@ -1102,6 +1102,148 @@ func InstallmentTab(win fyne.Window) fyne.CanvasObject {
 	return container.NewBorder(controls, nil, nil, nil, list)
 }
 
+// InstallmentTab builds the Installments screen with list and CRUD actions.
+func Installment2Tab(win fyne.Window) fyne.CanvasObject {
+	// Domain model for UI
+	type Installment struct {
+		ID         int64   `json:"id"`
+		PlanID     int64   `json:"plan_id"`
+		DueDate    string  `json:"due_date"`
+		AmountDue  float64 `json:"amount_due"`
+		AmountPaid float64 `json:"amount_paid"`
+	}
+
+	var items []Installment
+	var selectedID int64
+
+	list := widget.NewList(
+		func() int { return len(items) },
+		func() fyne.CanvasObject { return widget.NewLabel("") },
+		func(i widget.ListItemID, o fyne.CanvasObject) {
+			n := items[i]
+			o.(*widget.Label).SetText(
+				fmt.Sprintf("#%d | Plan:%d | Due:%s | Due:$%.2f Paid:$%.2f", n.ID, n.PlanID, n.DueDate, n.AmountDue, n.AmountPaid),
+			)
+		},
+	)
+	list.OnSelected = func(i widget.ListItemID) { selectedID = items[i].ID }
+
+	load := func() {
+		resp, err := client.HTTPClient.Get(client.BaseURL + "/installments")
+		if err != nil {
+			ShowError(win, err)
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			ShowError(win, fmt.Errorf("server error: %s", resp.Status))
+			return
+		}
+		var data []Installment
+		if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+			ShowError(win, err)
+			return
+		}
+		items = data
+		list.Refresh()
+	}
+
+	showForm := func(title string, inst *Installment, save func(Installment)) {
+		planEntry := widget.NewEntry()
+		planEntry.SetText(strconv.FormatInt(inst.PlanID, 10))
+		dueEntry := widget.NewEntry()
+		dueEntry.SetText(inst.DueDate)
+		dueAmt := widget.NewEntry()
+		dueAmt.SetText(fmt.Sprintf("%.2f", inst.AmountDue))
+		paidAmt := widget.NewEntry()
+		paidAmt.SetText(fmt.Sprintf("%.2f", inst.AmountPaid))
+		dlg := dialog.NewForm(
+			title, "Save", "Cancel",
+			[]*widget.FormItem{
+				{Text: "Plan ID", Widget: planEntry},
+				{Text: "Due Date", Widget: dueEntry},
+				{Text: "Amount Due", Widget: dueAmt},
+				{Text: "Amount Paid", Widget: paidAmt},
+			},
+			func(ok bool) {
+				if !ok {
+					dlg.Hide()
+					return
+				}
+				pid, _ := strconv.ParseInt(planEntry.Text, 10, 64)
+				ad, _ := strconv.ParseFloat(dueAmt.Text, 64)
+				ap, _ := strconv.ParseFloat(paidAmt.Text, 64)
+				n := Installment{ID: inst.ID, PlanID: pid, DueDate: dueEntry.Text, AmountDue: ad, AmountPaid: ap}
+				save(n)
+				dlg.Hide()
+			}, win)
+		dlg.Show()
+	}
+
+	btnRefresh := widget.NewButton("Refresh", load)
+	btnNew := widget.NewButton("New", func() {
+		showForm("New Installment", &Installment{}, func(n Installment) {
+			buf, _ := json.Marshal(n)
+			resp, err := client.HTTPClient.Post(client.BaseURL+"/installments", "application/json", bytes.NewReader(buf))
+			if err != nil {
+				ShowError(win, err)
+				return
+			}
+			resp.Body.Close()
+			load()
+		})
+	})
+	btnEdit := widget.NewButton("Edit", func() {
+		if selectedID == 0 {
+			dialog.ShowInformation("Select one", "Please select an installment to edit.", win)
+			return
+		}
+		var cur Installment
+		for _, it := range items {
+			if it.ID == selectedID {
+				cur = it
+				break
+			}
+		}
+		showForm("Edit Installment", &cur, func(n Installment) {
+			buf, _ := json.Marshal(n)
+			req, _ := http.NewRequest(http.MethodPut, client.BaseURL+fmt.Sprintf("/installments/%d", n.ID), bytes.NewReader(buf))
+			req.Header.Set("Content-Type", "application/json")
+			resp, err := client.HTTPClient.Do(req)
+			if err != nil {
+				ShowError(win, err)
+				return
+			}
+			resp.Body.Close()
+			load()
+		})
+	})
+	btnDel := widget.NewButton("Delete", func() {
+		if selectedID == 0 {
+			dialog.ShowInformation("Select one", "Please select an installment to delete.", win)
+			return
+		}
+		confirm := dialog.NewConfirm("Confirm Delete", "Are you sure?", func(ok bool) {
+			if !ok {
+				return
+			}
+			req, _ := http.NewRequest(http.MethodDelete, client.BaseURL+fmt.Sprintf("/installments/%d", selectedID), nil)
+			resp, err := client.HTTPClient.Do(req)
+			if err != nil {
+				ShowError(win, err)
+				return
+			}
+			resp.Body.Close()
+			load()
+		}, win)
+		confirm.Show()
+	})
+
+	load()
+	controls := container.NewHBox(btnRefresh, btnNew, btnEdit, btnDel)
+	return container.NewBorder(controls, nil, nil, nil, list)
+}
+
 // PaymentTab builds the Payments screen with list and CRUD actions.
 func PaymentTab(win fyne.Window) fyne.CanvasObject {
 	// Domain model for UI
