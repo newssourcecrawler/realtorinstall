@@ -9,6 +9,7 @@ require (
 	github.com/360EntSecGroup-Skylar/excelize v1.4.1
 	github.com/gin-contrib/cors v1.3.1
 	github.com/golang-jwt/jwt/v4 v4.5.2
+	github.com/lib/pq v1.10.9
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/wailsapp/wails/v2 v2.10.1
 )
