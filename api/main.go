@@ -108,6 +108,7 @@ func main() {
 	authSvc := apiServices.NewAuthService(userRepo, cfg.AppJWTSecret, time.Hour*24)
 
 	propSvc := apiServices.NewPropertyService(propRepo, userRepo, pricingRepo)
+
 	buyerSvc := apiServices.NewBuyerService(buyerRepo)
 	pricingSvc := apiServices.NewPricingService(pricingRepo)
 	planSvc := apiServices.NewPlanService(planRepo, instRepo)

@@ -11,7 +11,7 @@ import (
 type RoleRepo interface {
 	Create(ctx context.Context, r *models.Role) (int64, error)
 	ListAll(ctx context.Context) ([]*models.Role, error)
-	GetByID(ctx context.Context, tenantID string, id int64) (*models.Role, error)
+	//GetByID(ctx context.Context, tenantID string, id int64) (*models.Role, error)
 	Update(ctx context.Context, b *models.Role) error // using b.TenantID,b.ID
 	Delete(ctx context.Context, tenantID string, id int64) error
 }

@@ -2683,6 +2683,148 @@ func ReportTab(win fyne.Window) fyne.CanvasObject {
 	)
 }
 
+// AccessControlTab lets admins assign roles to users and permissions to roles.
+func AccessControlTab(win fyne.Window) fyne.CanvasObject {
+	// Models
+	type User struct {
+		ID       int64
+		UserName string
+	}
+	type Role struct {
+		ID   int64
+		Name string
+	}
+	type Permission struct {
+		ID   int64
+		Name string
+	}
+
+	// Load data
+	var users []User
+	var roles []Role
+	var perms []Permission
+	loadLists := func() {
+		// Users
+		r1, err := client.HTTPClient.Get(client.BaseURL + "/users")
+		if err != nil {
+			ShowError(win, err)
+			return
+		}
+		defer r1.Body.Close()
+		json.NewDecoder(r1.Body).Decode(&users)
+		// Roles
+		r2, err := client.HTTPClient.Get(client.BaseURL + "/roles")
+		if err != nil {
+			ShowError(win, err)
+			return
+		}
+		defer r2.Body.Close()
+		json.NewDecoder(r2.Body).Decode(&roles)
+		// Permissions
+		r3, err := client.HTTPClient.Get(client.BaseURL + "/permissions")
+		if err != nil {
+			ShowError(win, err)
+			return
+		}
+		defer r3.Body.Close()
+		json.NewDecoder(r3.Body).Decode(&perms)
+	}
+	loadLists()
+
+	// UI: user selector
+	userItems := make([]string, len(users))
+	for i, u := range users {
+		userItems[i] = u.UserName
+	}
+	userSelect := widget.NewSelect(userItems, func(name string) {})
+
+	// Role checkboxes
+	roleChecks := make([]*widget.Check, len(roles))
+	for i, r := range roles {
+		roleChecks[i] = widget.NewCheck(r.Name, nil)
+	}
+
+	// Permission checkboxes
+	permChecks := make([]*widget.Check, len(perms))
+	for i, p := range perms {
+		permChecks[i] = widget.NewCheck(p.Name, nil)
+	}
+
+	// Load assignments
+	loadAssignments := func() {
+		sel := userSelect.Selected
+		if sel == "" {
+			return
+		}
+		// find userID
+		var uid int64
+		for _, u := range users {
+			if u.UserName == sel {
+				uid = u.ID
+			}
+		}
+		// GET /userroles?user_id=uid
+		r, err := client.HTTPClient.Get(client.BaseURL + fmt.Sprintf("/userroles?user_id=%d", uid))
+		if err != nil {
+			ShowError(win, err)
+			return
+		}
+		defer r.Body.Close()
+		var urs []struct{ RoleID int64 }
+		json.NewDecoder(r.Body).Decode(&urs)
+		assigned := map[int64]bool{}
+		for _, ur := range urs {
+			assigned[ur.RoleID] = true
+		}
+		for i, r := range roles {
+			roleChecks[i].SetChecked(assigned[r.ID])
+		}
+		// Similarly load role->permissions when needed
+	}
+	userSelect.OnChanged = func(_ string) { loadAssignments() }
+
+	// Save button
+	saveBtn := widget.NewButton("Save Roles", func() {
+		sel := userSelect.Selected
+		var uid int64
+		for _, u := range users {
+			if u.UserName == sel {
+				uid = u.ID
+			}
+		}
+		// collect checked role IDs
+		var rids []int64
+		for i, r := range roles {
+			if roleChecks[i].Checked {
+				rids = append(rids, r.ID)
+			}
+		}
+		// POST body
+		body := struct {
+			UserID  int64
+			RoleIDs []int64
+		}{uid, rids}
+		buf, _ := json.Marshal(body)
+		r, err := client.HTTPClient.Post(client.BaseURL+"/userroles/bulk", "application/json", bytes.NewReader(buf))
+		if err != nil {
+			ShowError(win, err)
+			return
+		}
+		r.Body.Close()
+		dialog.ShowInformation("Saved", "Roles updated", win)
+	})
+
+	// Layout
+	rolesBox := container.NewVBox(widget.NewLabel("Roles:"), container.NewVBox(roleChecks...))
+	permsBox := container.NewVBox(widget.NewLabel("Permissions (per role):"), container.NewVBox(permChecks...))
+	main := container.NewVBox(
+		widget.NewLabelWithStyle("Access Control", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
+		container.NewHBox(widget.NewLabel("User:"), userSelect, saveBtn),
+		container.NewHSplit(rolesBox, permsBox),
+	)
+	return main
+}
+
 // getReportKeys returns sorted keys of the reports map
 func getReportKeys(m map[string]string) []string {
 	keys := make([]string, 0, len(m))
